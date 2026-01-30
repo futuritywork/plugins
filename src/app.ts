@@ -2,9 +2,11 @@ import type { ServerOptions } from "@modelcontextprotocol/sdk/server/index.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Implementation } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { createChainedAuthRouter } from "./chainedAuth";
 import { OAuthOptionsSchema, type OAuthOptions } from "./oauth";
 import {
 	PluginManifestSchema,
+	PluginManifestSchemaCompat,
 	type PluginManifestOptions,
 } from "./pluginManifest";
 import { signPayload } from "./signing";
@@ -13,7 +15,12 @@ import {
 	StreamableHttpTransport,
 } from "./transports/streamableHttp";
 import { WebSocketTransport } from "./transports/websocket";
-import type { AuthMiddleware, Middleware, WellKnownEntry } from "./types";
+import type {
+	AuthMiddleware,
+	ChainedAuthConfig,
+	Middleware,
+	WellKnownEntry,
+} from "./types";
 
 export interface ToolOptions<I, O> {
 	description?: string;
@@ -35,6 +42,7 @@ export interface McpAppOptions {
 	oauth?: OAuthOptions;
 	pluginManifest?: PluginManifestOptions;
 	auth?: AuthMiddleware;
+	chainedAuth?: ChainedAuthConfig;
 	path?: string;
 	middleware?: Middleware[];
 }
@@ -157,6 +165,9 @@ export class McpApp {
 	async listen(port: number, transportType: "websocket" | "http" = "http") {
 		const path = this.options.path ?? "/mcp";
 		let wellKnown: Record<string, WellKnownEntry> | undefined;
+		let chainedAuthRouter:
+			| ReturnType<typeof createChainedAuthRouter>
+			| undefined;
 
 		if (this.options.oauth) {
 			const oauth = OAuthOptionsSchema.parse(this.options.oauth);
@@ -173,17 +184,21 @@ export class McpApp {
 			// Only include optional fields if they have values
 			if (oauth.jwksUri) authServer.jwks_uri = oauth.jwksUri;
 			if (oauth.tokenEndpointAuthMethodsSupported) {
-				authServer.token_endpoint_auth_methods_supported = oauth.tokenEndpointAuthMethodsSupported;
+				authServer.token_endpoint_auth_methods_supported =
+					oauth.tokenEndpointAuthMethodsSupported;
 			}
-			if (oauth.registrationEndpoint) authServer.registration_endpoint = oauth.registrationEndpoint;
-			if (oauth.userInfoEndpoint) authServer.userinfo_endpoint = oauth.userInfoEndpoint;
+			if (oauth.registrationEndpoint)
+				authServer.registration_endpoint = oauth.registrationEndpoint;
+			if (oauth.userInfoEndpoint)
+				authServer.userinfo_endpoint = oauth.userInfoEndpoint;
 
 			wellKnown = { "oauth-authorization-server": { body: authServer } };
 		}
 
 		if (this.options.pluginManifest) {
 			const { signingKey, ...manifestData } = this.options.pluginManifest;
-			const manifest = PluginManifestSchema.parse(manifestData);
+			// Use compat schema to support both v1 and v2 manifest formats
+			const manifest = PluginManifestSchemaCompat.parse(manifestData);
 			const payload = JSON.stringify(manifest);
 			const jws = signPayload(payload, signingKey);
 
@@ -192,6 +207,10 @@ export class McpApp {
 				body: manifest,
 				headers: { "X-Futurity-Signature": jws },
 			};
+		}
+
+		if (this.options.chainedAuth) {
+			chainedAuthRouter = createChainedAuthRouter(this.options.chainedAuth);
 		}
 
 		if (transportType === "websocket") {
@@ -213,6 +232,7 @@ export class McpApp {
 				wellKnown,
 				auth: this.options.auth,
 				middleware: this.middlewares,
+				chainedAuthRouter,
 				onSession: async (transport: StreamableHttpTransport) => {
 					const server = this.createServer();
 					this.sessions.set(transport.sessionId, server);

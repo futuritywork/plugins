@@ -72,12 +72,13 @@ const port = parseInt(process.env.PORT || "3000", 10);
 const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
 
 const pluginManifest: PluginManifestOptions = {
-	specVersion: 1,
+	specVersion: 2,
 	pluginId: "monday",
 	name: "monday.com MCP Server",
 	version: "1.0.0",
 	signingKey,
-	authForwarding: {
+	auth: {
+		type: "forwarding",
 		tokenEndpoint: "https://auth.monday.com/oauth2/token",
 		authorizationEndpoint: "https://auth.monday.com/oauth2/authorize",
 		requiredScopes: ["me:read", "boards:read", "boards:write", "workspaces:read", "updates:read", "updates:write"],

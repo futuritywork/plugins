@@ -172,11 +172,20 @@ const app = mcp({
 });
 ```
 
-## Auth Forwarding
+## Authentication
+
+There are two auth modes for Futurity plugins:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Auth Forwarding** (v1) | Platform manages OAuth tokens | Simple integrations |
+| **Chained Auth** (v2) | Plugin manages sessions & tokens | Complex integrations, multi-service |
+
+### Auth Forwarding (v1)
 
 Auth forwarding lets the Futurity platform manage OAuth tokens on behalf of your plugin. Instead of implementing OAuth end-to-end, you declare your auth requirements in a signed manifest.
 
-### 1. Generate a signing keypair
+#### 1. Generate a signing keypair
 
 ```bash
 bun run keygen
@@ -184,19 +193,20 @@ bun run keygen
 
 This prints an Ed25519 keypair. Keep the private key secret; register the public key with the Futurity API.
 
-### 2. Configure the plugin manifest
+#### 2. Configure the plugin manifest
 
 ```typescript
 const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
   pluginManifest: {
-    specVersion: 1,
+    specVersion: 2,
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",
     signingKey: process.env.FUTURITY_SIGNING_KEY!,
-    authForwarding: {
+    auth: {
+      type: "forwarding",
       tokenEndpoint: "https://auth.example.com/oauth2/token",
       authorizationEndpoint: "https://auth.example.com/oauth2/authorize",
       requiredScopes: ["read", "write"],
@@ -208,7 +218,7 @@ const app = mcp({
 });
 ```
 
-### 3. Serve the manifest
+#### 3. Serve the manifest
 
 The signed manifest is automatically served at:
 
@@ -217,6 +227,48 @@ GET /.well-known/futurity/plugin
 ```
 
 The response includes an `X-Futurity-Signature` header with an Ed25519 JWS signature.
+
+### Chained Auth (v2)
+
+For plugins that need to manage their own sessions and store third-party tokens, use chained auth. The plugin controls the OAuth flow and issues its own tokens.
+
+```typescript
+const app = mcp({
+  name: "my-plugin",
+  version: "1.0.0",
+  pluginManifest: {
+    specVersion: 2,
+    pluginId: "my-plugin",
+    name: "My Plugin",
+    version: "1.0.0",
+    signingKey: process.env.PLUGIN_SIGNING_KEY!,
+    auth: {
+      type: "chained",
+      authorizationEndpoint: "https://plugin.example.com/auth/authorize",
+      callbackEndpoint: "https://plugin.example.com/auth/callback",
+      tokenEndpoint: "https://plugin.example.com/auth/token",
+      requiredUserContext: ["user_id", "email"],
+    },
+    mcpUrl: "https://plugin.example.com/mcp",
+  },
+  chainedAuth: {
+    sessionStore: mySessionStore,
+    platformJwksUrl: "https://platform.example.com/.well-known/jwks.json",
+    pluginSigningKey: process.env.PLUGIN_SIGNING_KEY!,
+    handlers: {
+      onAuthorize: async (userContext, platformState, platformCallback) => { ... },
+      onCallback: async (req) => { ... },
+      onToken: async (req) => { ... },
+    },
+  },
+});
+```
+
+See [docs/chained-auth.md](docs/chained-auth.md) for full documentation including:
+- Complete implementation guide
+- Request binding for anti-replay protection
+- Session management
+- Platform integration guide
 
 ### Signing utilities
 
@@ -339,6 +391,7 @@ Features:
 
 ```typescript
 import type {
+  // App
   McpApp,
   McpAppOptions,
   ToolOptions,
@@ -346,14 +399,63 @@ import type {
   Middleware,
   AuthMiddleware,
   WellKnownEntry,
+
+  // Plugin Manifest
   PluginManifest,
   PluginManifestOptions,
+  Auth,
   AuthForwarding,
+  ChainedAuth,
+
+  // Chained Auth
+  Session,
+  PendingSession,
+  SessionStore,
+  UserContext,
+  ChainedAuthConfig,
+  ChainedAuthHandlers,
+  PlatformAssertionClaims,
+  VerifiedPlatformAssertion,
+
+  // Transports
   StreamableHttpServer,
   StreamableHttpServerOptions,
   StreamableHttpTransport,
   WebSocketTransport,
   WebSocketTransportOptions,
+} from "@futuritywork/plugins";
+```
+
+### Chained Auth Utilities
+
+```typescript
+import {
+  // Session management
+  createPendingSession,
+  activateSession,
+  expireSession,
+  revokeSession,
+  isSessionValid,
+  InMemorySessionStore,
+
+  // Token generation
+  generatePluginToken,
+  validatePluginToken,
+  generateRefreshToken,
+
+  // State management
+  generateChainedState,
+  parseChainedState,
+
+  // Request binding
+  hashPluginToken,
+  hashRequest,
+  validatePlatformAssertion,
+  validateAuthenticatedRequest,
+
+  // JWT validation
+  validateUserContextJwt,
+  clearJwksCache,
 } from "@futuritywork/plugins";
 ```
 

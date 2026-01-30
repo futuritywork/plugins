@@ -1,4 +1,5 @@
 export * from "./app";
+export * from "./chainedAuth";
 export * from "./cors";
 export * from "./oauth";
 export * from "./pluginManifest";

@@ -11,6 +11,12 @@ import {
 import type { Server } from "bun";
 import type { AuthMiddleware, Middleware, WellKnownEntry } from "../types";
 
+export interface ChainedAuthRouter {
+	handleAuthorize(req: Request): Promise<Response>;
+	handleCallback(req: Request): Promise<Response>;
+	handleToken(req: Request): Promise<Response>;
+}
+
 export interface StreamableHttpServerOptions {
 	port: number;
 	path: string;
@@ -19,6 +25,7 @@ export interface StreamableHttpServerOptions {
 	middleware?: Middleware[];
 	sessionIdGenerator?: () => string;
 	enableJsonResponse?: boolean;
+	chainedAuthRouter?: ChainedAuthRouter;
 	/**
 	 * Called when a new session is created. Use this to connect an MCP server to the transport.
 	 */
@@ -90,6 +97,24 @@ export class StreamableHttpServer {
 						...entry.headers,
 					},
 				});
+			}
+		}
+
+		// Handle chained auth routes
+		if (this.opts.chainedAuthRouter && url.pathname.startsWith("/auth/")) {
+			const authPath = url.pathname.replace("/auth/", "");
+			switch (authPath) {
+				case "authorize":
+					return this.opts.chainedAuthRouter.handleAuthorize(req);
+				case "callback":
+					return this.opts.chainedAuthRouter.handleCallback(req);
+				case "token":
+					return this.opts.chainedAuthRouter.handleToken(req);
+				default:
+					return new Response(
+						JSON.stringify({ error: "not_found", error_description: "Unknown auth endpoint" }),
+						{ status: 404, headers: { "Content-Type": "application/json" } }
+					);
 			}
 		}
 
