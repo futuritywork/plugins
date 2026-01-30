@@ -1,18 +1,18 @@
-# @futurity/plugins
+# @futuritywork/plugins
 
 A minimal MCP (Model Context Protocol) server library for Bun with auth forwarding support.
 
 ## Installation
 
 ```bash
-bun add @futurity/plugins
+bun add git+ssh://github.com/futuritywork/plugins.git#v0.0.1
 ```
 
 ## Quick Start
 
 ```typescript
 import { z } from "zod";
-import { mcp } from "@futurity/plugins";
+import { mcp } from "@futuritywork/plugins";
 
 const app = mcp({
   name: "my-server",
@@ -100,7 +100,7 @@ app.resource("config://settings", {
 Apply a plugin.
 
 ```typescript
-import { cors } from "@futurity/plugins";
+import { cors } from "@futuritywork/plugins";
 
 app.use(
   cors({
@@ -136,7 +136,7 @@ await app.listen(3000, "websocket");
 ## CORS
 
 ```typescript
-import { mcp, cors } from "@futurity/plugins";
+import { mcp, cors } from "@futuritywork/plugins";
 
 const app = mcp({ name: "server", version: "1.0.0" });
 
@@ -221,7 +221,7 @@ The response includes an `X-Futurity-Signature` header with an Ed25519 JWS signa
 ### Signing utilities
 
 ```typescript
-import { generateKeyPair, signPayload, verifyPayload } from "@futurity/plugins";
+import { generateKeyPair, signPayload, verifyPayload } from "@futuritywork/plugins";
 
 const { privateKey, publicKey } = generateKeyPair();
 const jws = signPayload('{"hello":"world"}', privateKey);
@@ -286,7 +286,7 @@ await app.stop();
 ## Direct Transport Usage
 
 ```typescript
-import { StreamableHttpServer, StreamableHttpTransport } from "@futurity/plugins";
+import { StreamableHttpServer, StreamableHttpTransport } from "@futuritywork/plugins";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const server = new StreamableHttpServer({
@@ -354,7 +354,7 @@ import type {
   StreamableHttpTransport,
   WebSocketTransport,
   WebSocketTransportOptions,
-} from "@futurity/plugins";
+} from "@futuritywork/plugins";
 ```
 
 ## License
