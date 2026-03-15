@@ -1,10 +1,20 @@
 import { z } from "zod";
 
-// v1 Auth Forwarding Schema (platform manages tokens, forwards to plugin)
+// Auth Forwarding Schema (platform manages tokens, forwards to plugin)
+// Supports authorization_code (user-initiated OAuth), client_credentials, and saml2-bearer
+// (admin-configured). When grantType is not authorization_code, authorizationEndpoint is
+// not needed since there is no user redirect.
 export const AuthForwardingSchema = z.object({
   type: z.literal("forwarding"),
   tokenEndpoint: z.url(),
-  authorizationEndpoint: z.url(),
+  authorizationEndpoint: z.url().optional(),
+  grantType: z
+    .enum([
+      "authorization_code",
+      "client_credentials",
+      "urn:ietf:params:oauth:grant-type:saml2-bearer",
+    ])
+    .default("authorization_code"),
   requiredScopes: z.array(z.string()).default([]),
   deliveryMethod: z.enum(["header", "query"]).default("header"),
   maxTokenTtl: z.number().positive().optional(),
@@ -50,14 +60,29 @@ export const AuthSchema = z.discriminatedUnion("type", [
   ChainedAuthSchema,
 ]);
 
-export const PluginManifestSchema = z.object({
-  specVersion: z.number().int().min(1).max(2),
-  pluginId: z.string().min(1),
-  name: z.string().min(1),
-  version: z.string().regex(/^\d+\.\d+\.\d+$/, "Must be semver (e.g. 1.0.0)"),
-  auth: AuthSchema,
-  mcpUrl: z.url(),
-});
+export const PluginManifestSchema = z
+  .object({
+    specVersion: z.number().int().min(1).max(2),
+    pluginId: z.string().min(1),
+    name: z.string().min(1),
+    version: z.string().regex(/^\d+\.\d+\.\d+$/, "Must be semver (e.g. 1.0.0)"),
+    auth: AuthSchema,
+    mcpUrl: z.url(),
+  })
+  .refine(
+    (data) => {
+      if (data.auth.type !== "forwarding") return true;
+      return (
+        data.auth.grantType !== "authorization_code" ||
+        data.auth.authorizationEndpoint
+      );
+    },
+    {
+      message:
+        "authorizationEndpoint is required when grantType is authorization_code",
+      path: ["auth", "authorizationEndpoint"],
+    },
+  );
 
 // Legacy schema for backward compatibility (v1 with authForwarding field)
 export const PluginManifestSchemaV1 = z.object({

@@ -6,12 +6,12 @@
       "name": "@futurity/plugins",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.24.3",
-        "@typescript/native-preview": "^7.0.0-dev.20260130.1",
-        "typescript": "^5.9.3",
         "zod": "^4.1.13",
       },
       "devDependencies": {
         "@types/bun": "latest",
+        "@typescript/native-preview": "^7.0.0-dev.20260130.1",
+        "typescript": "^5.9.3",
       },
     },
   },

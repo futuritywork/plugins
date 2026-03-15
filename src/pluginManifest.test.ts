@@ -272,6 +272,123 @@ describe("AuthForwardingSchema", () => {
 		const result = AuthForwardingSchema.parse(valid);
 		expect(result.type).toBe("forwarding");
 	});
+
+	test("defaults grantType to authorization_code", () => {
+		const valid = {
+			type: "forwarding" as const,
+			tokenEndpoint: "https://auth.example.com/token",
+			authorizationEndpoint: "https://auth.example.com/authorize",
+		};
+		const result = AuthForwardingSchema.parse(valid);
+		expect(result.grantType).toBe("authorization_code");
+	});
+
+	test("accepts client_credentials without authorizationEndpoint", () => {
+		const valid = {
+			type: "forwarding" as const,
+			tokenEndpoint: "https://api.ariba.com/v2/oauth/token",
+			grantType: "client_credentials" as const,
+		};
+		const result = AuthForwardingSchema.parse(valid);
+		expect(result.grantType).toBe("client_credentials");
+		expect(result.authorizationEndpoint).toBeUndefined();
+	});
+
+	test("accepts saml2-bearer without authorizationEndpoint", () => {
+		const valid = {
+			type: "forwarding" as const,
+			tokenEndpoint: "https://dc.successfactors.com/oauth/token",
+			grantType: "urn:ietf:params:oauth:grant-type:saml2-bearer" as const,
+		};
+		const result = AuthForwardingSchema.parse(valid);
+		expect(result.grantType).toBe(
+			"urn:ietf:params:oauth:grant-type:saml2-bearer",
+		);
+		expect(result.authorizationEndpoint).toBeUndefined();
+	});
+});
+
+describe("PluginManifestSchema v2 - admin grant types", () => {
+	test("accepts client_credentials forwarding manifest", () => {
+		const manifest = {
+			specVersion: 2,
+			pluginId: "sap-ariba",
+			name: "SAP Ariba",
+			version: "1.0.0",
+			auth: {
+				type: "forwarding" as const,
+				tokenEndpoint: "https://api.ariba.com/v2/oauth/token",
+				grantType: "client_credentials" as const,
+				deliveryMethod: "header" as const,
+			},
+			mcpUrl: "https://ariba-plugin.example.com/mcp",
+		};
+		const result = PluginManifestSchema.parse(manifest);
+		expect(result.auth.type).toBe("forwarding");
+		if (result.auth.type === "forwarding") {
+			expect(result.auth.grantType).toBe("client_credentials");
+			expect(result.auth.authorizationEndpoint).toBeUndefined();
+		}
+	});
+
+	test("accepts saml2-bearer forwarding manifest", () => {
+		const manifest = {
+			specVersion: 2,
+			pluginId: "sap-successfactors",
+			name: "SAP SuccessFactors",
+			version: "1.0.0",
+			auth: {
+				type: "forwarding" as const,
+				tokenEndpoint: "https://dc.successfactors.com/oauth/token",
+				grantType:
+					"urn:ietf:params:oauth:grant-type:saml2-bearer" as const,
+				deliveryMethod: "header" as const,
+			},
+			mcpUrl: "https://sf-plugin.example.com/mcp",
+		};
+		const result = PluginManifestSchema.parse(manifest);
+		expect(result.auth.type).toBe("forwarding");
+		if (result.auth.type === "forwarding") {
+			expect(result.auth.grantType).toBe(
+				"urn:ietf:params:oauth:grant-type:saml2-bearer",
+			);
+		}
+	});
+
+	test("rejects authorization_code without authorizationEndpoint", () => {
+		const manifest = {
+			specVersion: 2,
+			pluginId: "test",
+			name: "Test",
+			version: "1.0.0",
+			auth: {
+				type: "forwarding" as const,
+				tokenEndpoint: "https://auth.example.com/token",
+				grantType: "authorization_code" as const,
+				// missing authorizationEndpoint
+			},
+			mcpUrl: "https://mcp.example.com/mcp",
+		};
+		expect(() => PluginManifestSchema.parse(manifest)).toThrow(
+			"authorizationEndpoint is required",
+		);
+	});
+
+	test("rejects invalid grantType", () => {
+		const manifest = {
+			specVersion: 2,
+			pluginId: "test",
+			name: "Test",
+			version: "1.0.0",
+			auth: {
+				type: "forwarding" as const,
+				tokenEndpoint: "https://auth.example.com/token",
+				grantType: "password",
+			},
+			mcpUrl: "https://mcp.example.com/mcp",
+		};
+		expect(() => PluginManifestSchema.parse(manifest)).toThrow();
+	});
 });
 
 describe("ChainedAuthSchema", () => {
