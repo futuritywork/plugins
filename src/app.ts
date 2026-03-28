@@ -1,6 +1,9 @@
 import type { ServerOptions } from "@modelcontextprotocol/sdk/server/index.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Implementation } from "@modelcontextprotocol/sdk/types.js";
+import type {
+	Implementation,
+	ToolAnnotations,
+} from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { createChainedAuthRouter } from "./chainedAuth";
 import { OAuthOptionsSchema, type OAuthOptions } from "./oauth";
@@ -18,15 +21,33 @@ import { WebSocketTransport } from "./transports/websocket";
 import type {
 	AuthMiddleware,
 	ChainedAuthConfig,
+	DangerLevel,
 	Middleware,
 	WellKnownEntry,
 } from "./types";
+
+function buildAnnotations(
+	opts: ToolOptions<unknown, unknown>
+): ToolAnnotations | undefined {
+	if (!opts.dangerLevel && !opts.requiresExplicitConsent) return undefined;
+
+	const level = opts.dangerLevel ?? "read";
+	return {
+		// Standard MCP annotation hints
+		readOnlyHint: level === "read",
+		destructiveHint: level === "delete",
+	};
+}
 
 export interface ToolOptions<I, O> {
 	description?: string;
 	input?: z.ZodType<I>;
 	output?: z.ZodType<O>;
 	handler: (input: I) => Promise<O> | O;
+	/** Tool danger level. Defaults to "read" if not specified. */
+	dangerLevel?: DangerLevel;
+	/** Whether this tool requires explicit user consent before execution, regardless of the user's permission mode. */
+	requiresExplicitConsent?: boolean;
 }
 
 export interface ResourceOptions<T> {
@@ -88,6 +109,13 @@ export class McpApp {
 
 		// Register all tools
 		for (const { name, opts } of this.toolRegistrations) {
+			const annotations = buildAnnotations(opts);
+			const meta: Record<string, unknown> = {};
+			if (opts.dangerLevel) meta["futurity:dangerLevel"] = opts.dangerLevel;
+			if (opts.requiresExplicitConsent)
+				meta["futurity:requiresExplicitConsent"] =
+					opts.requiresExplicitConsent;
+
 			server.registerTool(
 				name,
 				{
@@ -95,6 +123,8 @@ export class McpApp {
 					inputSchema: opts.input
 						? (opts.input as any).shape || opts.input
 						: undefined,
+					...(annotations && { annotations }),
+					...(Object.keys(meta).length > 0 && { _meta: meta }),
 				},
 				async (input: any) => {
 					const result = await opts.handler(input);

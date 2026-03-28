@@ -2,6 +2,9 @@ export type Next = (req: Request) => Promise<Response | undefined>;
 export type Middleware = (req: Request, next: Next) => Promise<Response | undefined>;
 export type AuthMiddleware = (req: Request) => Promise<boolean> | boolean;
 
+/** How dangerous a tool's side effects are. */
+export type DangerLevel = "read" | "write" | "delete";
+
 export interface WellKnownEntry {
 	body: unknown;
 	headers?: Record<string, string>;
