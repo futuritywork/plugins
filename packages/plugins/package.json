@@ -1,0 +1,56 @@
+{
+  "name": "@futurity/plugins",
+  "version": "2.0.0",
+  "type": "module",
+  "description": "A minimal MCP (Model Context Protocol) server library for Bun with auth forwarding support",
+  "author": "Futurity",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "llm",
+    "bun",
+    "futurity"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./signing": {
+      "import": "./dist/signing.js",
+      "types": "./dist/signing.d.ts"
+    },
+    "./cors": {
+      "import": "./dist/cors.js",
+      "types": "./dist/cors.d.ts"
+    },
+    "./oauth": {
+      "import": "./dist/oauth.js",
+      "types": "./dist/oauth.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "bun run build.ts",
+    "test": "bun test",
+    "check": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "zod": "^4.1.13"
+  },
+  "dependencies": {
+    "jose": "^6.0.11"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "@types/bun": "latest",
+    "typescript": "^5.9.3",
+    "zod": "^4.1.13"
+  }
+}
