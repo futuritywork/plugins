@@ -15,5 +15,5 @@
     "noImplicitOverride": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": ["src/**/*.test.ts", "src/keygen.ts", "src/derive-public.ts"]
 }
