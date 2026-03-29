@@ -1,41 +1,49 @@
-# @futuritywork/plugins
+# @futurity/plugins
 
 A minimal MCP (Model Context Protocol) server library for Bun with auth forwarding support.
 
-## Installation
-
-```bash
-bun add git+ssh://github.com/futuritywork/plugins.git#v0.0.1
-```
-
 ## Quick Start
 
-```typescript
-import { z } from "zod";
-import { mcp } from "@futuritywork/plugins";
+### Create a new plugin
+
+```bash
+bun create futurity-plugin my-plugin
+cd my-plugin
+bun run src/index.ts
+```
+
+### Or add to an existing project
+
+```bash
+bun add @futurity/plugins
+```
+
+### Basic usage
+
+```ts
+import { mcp, t } from "@futurity/plugins";
 
 const app = mcp({
-  name: "my-server",
+  name: "my-plugin",
   version: "1.0.0",
 });
 
-app.tool("greet", {
-  description: "Greet a user",
-  input: z.object({
-    name: z.string(),
+app.tool("hello", {
+  description: "Say hello",
+  input: t.obj({ name: t.str }),
+  handler: async ({ name }) => ({
+    greeting: `Hello, ${name}!`,
   }),
-  handler: async ({ name }) => {
-    return { message: `Hello, ${name}!` };
-  },
 });
 
-app.listen(3000);
+// Option A: Use the fetch handler (works in any runtime)
+Bun.serve({ port: 3000, fetch: app.fetch });
+
+// Option B: Convenience method (Bun only)
+await app.listen(3000);
 ```
 
-```bash
-bun run server.ts
-# MCP server listening on http://localhost:3000/mcp
-```
+> **Note:** The WebSocket transport (`app.listen(port, "websocket")`) is Bun-only. The HTTP transport (`app.fetch`) works in any runtime that supports the Fetch API.
 
 ## API
 
@@ -100,7 +108,7 @@ app.resource("config://settings", {
 Apply a plugin.
 
 ```typescript
-import { cors } from "@futuritywork/plugins";
+import { cors } from "@futurity/plugins";
 
 app.use(
   cors({
@@ -121,22 +129,30 @@ app.middleware(async (req, next) => {
 });
 ```
 
-### `app.listen(port, transport?)`
+### `app.fetch`
 
-Start the server.
+The standard Fetch API handler. Works in any runtime (Bun, Deno, Cloudflare Workers, Node with a fetch-compatible adapter, etc.):
+
+```typescript
+Bun.serve({ port: 3000, fetch: app.fetch });
+```
+
+### `app.listen(port, transport?)` (Bun only)
+
+Convenience method to start the server. Requires Bun.
 
 ```typescript
 // HTTP (default)
 await app.listen(3000);
 
-// WebSocket
+// WebSocket (Bun only)
 await app.listen(3000, "websocket");
 ```
 
 ## CORS
 
 ```typescript
-import { mcp, cors } from "@futuritywork/plugins";
+import { mcp, cors } from "@futurity/plugins";
 
 const app = mcp({ name: "server", version: "1.0.0" });
 
@@ -273,7 +289,7 @@ See [docs/chained-auth.md](docs/chained-auth.md) for full documentation includin
 ### Signing utilities
 
 ```typescript
-import { generateKeyPair, signPayload, verifyPayload } from "@futuritywork/plugins";
+import { generateKeyPair, signPayload, verifyPayload } from "@futurity/plugins";
 
 const { privateKey, publicKey } = generateKeyPair();
 const jws = signPayload('{"hello":"world"}', privateKey);
@@ -338,7 +354,7 @@ await app.stop();
 ## Direct Transport Usage
 
 ```typescript
-import { StreamableHttpServer, StreamableHttpTransport } from "@futuritywork/plugins";
+import { StreamableHttpServer, StreamableHttpTransport } from "@futurity/plugins";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const server = new StreamableHttpServer({
@@ -355,9 +371,11 @@ await server.start();
 
 ## Examples
 
-Run examples from the `examples/` directory:
+The `examples/` directory in this repo contains runnable examples. Clone the repo and run them directly:
 
 ```bash
+git clone https://github.com/futuritywork/plugins.git
+cd plugins
 bun examples/calculator.ts      # Math operations and unit conversion
 bun examples/cors.ts            # CORS configuration
 bun examples/database.ts        # Document database
@@ -423,7 +441,7 @@ import type {
   StreamableHttpTransport,
   WebSocketTransport,
   WebSocketTransportOptions,
-} from "@futuritywork/plugins";
+} from "@futurity/plugins";
 ```
 
 ### Chained Auth Utilities
@@ -456,7 +474,7 @@ import {
   // JWT validation
   validateUserContextJwt,
   clearJwksCache,
-} from "@futuritywork/plugins";
+} from "@futurity/plugins";
 ```
 
 ## License
