@@ -1,0 +1,19 @@
+{
+  "name": "create-futurity-plugin",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Scaffold a new Futurity MCP plugin",
+  "author": "Futurity",
+  "license": "MIT",
+  "bin": {
+    "create-futurity-plugin": "./index.ts"
+  },
+  "files": ["index.ts", "template"],
+  "keywords": [
+    "create",
+    "scaffold",
+    "mcp",
+    "futurity",
+    "plugin"
+  ]
+}
