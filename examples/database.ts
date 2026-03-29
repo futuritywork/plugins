@@ -8,8 +8,8 @@
  */
 
 import { z } from "zod";
-import { mcp } from "../src";
-import { cors } from "../src/cors";
+import { mcp } from "@futurity/plugins";
+import { cors } from "@futurity/plugins/cors";
 
 // Document type
 interface Document {

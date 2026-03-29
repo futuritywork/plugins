@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { mcp } from "../src";
+import { mcp } from "@futurity/plugins";
 
 const app = mcp({
 	name: "my-oauth-server",

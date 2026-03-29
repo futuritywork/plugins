@@ -14,8 +14,8 @@
  */
 
 import { z } from "zod";
-import { mcp, cors } from "../../src";
-import type { PluginManifestOptions } from "../../src";
+import { mcp, cors } from "@futurity/plugins";
+import type { PluginManifestOptions } from "@futurity/plugins";
 import {
 	MondayClient,
 	queries,
