@@ -18,7 +18,7 @@ export interface ChainedAuthRouter {
 }
 
 export interface StreamableHttpServerOptions {
-	port: number;
+	port?: number;
 	path: string;
 	wellKnown?: Record<string, WellKnownEntry>;
 	auth?: AuthMiddleware;
@@ -55,10 +55,13 @@ export class StreamableHttpServer {
 	}
 
 	async start(): Promise<void> {
+		if (this.opts.port === undefined) {
+			throw new Error("Cannot call start() without a port. Use handleFetch() directly instead.");
+		}
 		return new Promise<void>((resolve) => {
 			this.server = Bun.serve({
 				hostname: "0.0.0.0",
-				port: this.opts.port,
+				port: this.opts.port!,
 				fetch: async (req) => {
 					const runMiddlewares = async (
 						index: number,
@@ -80,7 +83,7 @@ export class StreamableHttpServer {
 		});
 	}
 
-	private async handleFetch(req: Request): Promise<Response | undefined> {
+	async handleFetch(req: Request): Promise<Response | undefined> {
 		const url = new URL(req.url);
 
 		// Handle .well-known paths
