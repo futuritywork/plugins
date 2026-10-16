@@ -95,11 +95,27 @@ app.tool("add", {
     a: z.number(),
     b: z.number(),
   }),
+  output: z.object({ sum: z.number() }),
   handler: async ({ a, b }) => {
     return { sum: a + b };
   },
 });
 ```
+
+An optional `output` declares the **final handler result**, not the upstream
+response. Supported Zod object schemas are advertised as MCP `outputSchema`;
+successful calls return the same parsed result as `structuredContent` and JSON
+text in `content`. Output parsing validates the complete schema, including async
+refinements and strict-object rules, applies defaults, and strips unknown fields
+unless the object schema preserves or rejects them. Invalid results become tool
+errors. The MCP SDK also validates the normalized structured content.
+
+Schemas must be directly object-shaped and convertible to draft-7 JSON Schema in
+output mode. Non-object schemas, unrepresentable fields (such as `z.date()`), and
+pipelines (including
+transforms and preprocessors, even nested ones) retain text-only behavior with
+no advertised schema or SDK output validation. Tools without `output` are
+unchanged. Wrap arrays or primitives in an object to expose structured output.
 
 Tools without input:
 
@@ -111,6 +127,22 @@ app.tool("ping", {
   },
 });
 ```
+
+Handlers also receive a per-call `ToolContext` with an `AbortSignal`:
+
+```typescript
+app.tool("status", {
+  handler: async (_input, { signal }) => {
+    const response = await fetch("https://example.com/status", { signal });
+    return response.json();
+  },
+});
+```
+
+The signal aborts when the MCP client cancels that request or the SDK connection
+closes. Cancellation is cooperative: pass the signal to downstream I/O or check
+`signal.throwIfAborted()` during work. It does not undo completed side effects.
+Existing handlers that accept only the input remain supported.
 
 ### `app.resource(uri, options)`
 
