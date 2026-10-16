@@ -79,6 +79,7 @@ const pluginManifest: PluginManifestOptions = {
 	signingKey,
 	auth: {
 		type: "forwarding",
+		grantType: "authorization_code",
 		tokenEndpoint: "https://auth.monday.com/oauth2/token",
 		authorizationEndpoint: "https://auth.monday.com/oauth2/authorize",
 		requiredScopes: ["me:read", "boards:read", "boards:write", "workspaces:read", "updates:read", "updates:write"],
@@ -92,6 +93,11 @@ const pluginManifest: PluginManifestOptions = {
 // ============================================================================
 
 const app = mcp({
+	catalog: {
+		grant_type: "authorization_code",
+		auth_url: "https://auth.monday.com/oauth2/authorize",
+		token_url: "https://auth.monday.com/oauth2/token",
+	},
 	name: "monday-mcp",
 	version: "1.0.0",
 	pluginManifest,

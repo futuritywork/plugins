@@ -16,7 +16,20 @@ const state = {
 	kv: new Map<string, string>(),
 };
 
+const signingKey = process.env.FUTURITY_SIGNING_KEY;
+if (!signingKey) throw new Error("Set FUTURITY_SIGNING_KEY to an Ed25519 PKCS8 DER base64 private key");
+
 const app = mcp({
+	catalog: { grant_type: "none" },
+	pluginManifest: {
+		specVersion: 3,
+		pluginId: "stateful-server",
+		name: "Stateful Server",
+		version: "1.0.0",
+		mcpUrl: "http://localhost:3000/mcp",
+		auth: { type: "none" },
+		signingKey,
+	},
 	name: "stateful-server",
 	version: "1.0.0",
 	instructions: `This server demonstrates stateful operations.

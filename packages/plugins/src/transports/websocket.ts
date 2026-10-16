@@ -9,6 +9,8 @@ export interface WebSocketTransportOptions {
 	wellKnown?: Record<string, WellKnownEntry>;
 	auth?: AuthMiddleware;
 	middleware?: Middleware[];
+	/** Handles public routes after middleware and before MCP authentication; undefined continues routing. */
+	publicHandler?: (req: Request) => Response | undefined;
 }
 
 export class WebSocketTransport implements Transport {
@@ -69,6 +71,8 @@ export class WebSocketTransport implements Transport {
 		req: Request,
 		server: Server<unknown>
 	): Promise<Response | undefined> {
+		const publicResponse = this.opts.publicHandler?.(req);
+		if (publicResponse) return publicResponse;
 		const url = new URL(req.url);
 
 		if (url.pathname.startsWith("/.well-known/")) {

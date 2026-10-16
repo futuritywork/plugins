@@ -1,5 +1,10 @@
 # @futurity/plugins Package Refactor
 
+> Historical design: code snippets below predate the required signed manifest API.
+> Current apps require `pluginManifest` with a valid signing key and `catalog`
+> with explicit `grant_type`; catalog identity comes from the manifest. Follow the
+> [current API and key setup](../../../README.md#basic-usage) for new apps.
+
 ## Goal
 
 Refactor the plugins repo from a fork-and-build template into a publishable npm
@@ -72,7 +77,10 @@ For consumers who want tree-shaking or to avoid pulling in the full library.
 convenience.
 
 ```ts
-const app = mcp({ name: "my-plugin", version: "1.0.0" });
+const app = mcp({
+  name: "my-plugin", version: "1.0.0",
+  catalog: { slug: "my-plugin", name: "My Plugin", grant_type: "none", mcp_url: "http://localhost:3000/mcp" },
+});
 
 // Primary — bring your own server
 Bun.serve({ port: 3000, fetch: app.fetch });
@@ -150,6 +158,7 @@ import { mcp, t } from "@futurity/plugins";
 const app = mcp({
   name: "my-plugin",
   version: "0.1.0",
+  catalog: { slug: "my-plugin", name: "My Plugin", grant_type: "none", mcp_url: "http://localhost:3000/mcp" },
 });
 
 app.tool("hello", {

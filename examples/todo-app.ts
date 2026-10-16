@@ -32,7 +32,20 @@ function generateId(): string {
 	return crypto.randomUUID();
 }
 
+const signingKey = process.env.FUTURITY_SIGNING_KEY;
+if (!signingKey) throw new Error("Set FUTURITY_SIGNING_KEY to an Ed25519 PKCS8 DER base64 private key");
+
 const app = mcp({
+	catalog: { grant_type: "none" },
+	pluginManifest: {
+		specVersion: 3,
+		pluginId: "todo-app",
+		name: "Todo App",
+		version: "1.0.0",
+		mcpUrl: "http://localhost:3000/mcp",
+		auth: { type: "none" },
+		signingKey,
+	},
 	name: "todo-app",
 	version: "1.0.0",
 	instructions: `A todo list management server.

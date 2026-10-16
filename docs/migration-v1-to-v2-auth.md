@@ -4,6 +4,13 @@ This guide covers migrating from v1 auth forwarding to v2 chained OAuth authenti
 These auth-mode labels are independent of the manifest version: both now use
 `specVersion: 3`. See [Manifest v3](manifest-v3.md).
 
+Both modes require a signed `pluginManifest` and `catalog`. Generate an Ed25519
+keypair first and set `FUTURITY_SIGNING_KEY` (PKCS8 DER base64); missing or invalid
+keys fail startup. `PLUGIN_SIGNING_KEY` is the separate PEM key used for chained
+session JWTs. Catalog identity is derived from the manifest and overrides any
+optional stale JSON identity fields; other metadata, including `grant_type`, stays
+explicit. See [key setup](../README.md#basic-usage).
+
 ## When to Migrate
 
 **Stay on v1 (Auth Forwarding)** if:
@@ -35,6 +42,7 @@ These auth-mode labels are independent of the manifest version: both now use
 **Before (v1):**
 ```typescript
 const app = mcp({
+  catalog: { grant_type: "authorization_code" },
   name: "my-plugin",
   version: "1.0.0",
   pluginManifest: {
@@ -42,9 +50,10 @@ const app = mcp({
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",
-    signingKey: process.env.PLUGIN_SIGNING_KEY!,
+    signingKey: process.env.FUTURITY_SIGNING_KEY!,
     auth: {
       type: "forwarding",
+      grantType: "authorization_code",
       tokenEndpoint: "https://external.com/oauth/token",
       authorizationEndpoint: "https://external.com/oauth/authorize",
       requiredScopes: ["read", "write"],
@@ -62,6 +71,7 @@ const app = mcp({
 **After (v2):**
 ```typescript
 const app = mcp({
+  catalog: { grant_type: "authorization_code" },
   name: "my-plugin",
   version: "1.0.0",
   pluginManifest: {
@@ -69,7 +79,7 @@ const app = mcp({
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",
-    signingKey: process.env.PLUGIN_SIGNING_KEY!,
+    signingKey: process.env.FUTURITY_SIGNING_KEY!,
     auth: {
       type: "chained",
       authorizationEndpoint: "https://plugin.example.com/auth/authorize",

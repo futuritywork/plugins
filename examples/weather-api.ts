@@ -68,7 +68,20 @@ function getWeather(cityId: string, date: Date) {
 	};
 }
 
+const signingKey = process.env.FUTURITY_SIGNING_KEY;
+if (!signingKey) throw new Error("Set FUTURITY_SIGNING_KEY to an Ed25519 PKCS8 DER base64 private key");
+
 const app = mcp({
+	catalog: { grant_type: "none" },
+	pluginManifest: {
+		specVersion: 3,
+		pluginId: "weather-api",
+		name: "Weather API",
+		version: "1.0.0",
+		mcpUrl: "http://localhost:3000/mcp",
+		auth: { type: "none" },
+		signingKey,
+	},
 	name: "weather-api",
 	version: "1.0.0",
 	instructions: `A weather information server.

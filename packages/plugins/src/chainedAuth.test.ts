@@ -23,6 +23,7 @@ import {
 	validateAuthenticatedRequest,
 } from "./chainedAuth";
 import { mcp } from "./app";
+import { pluginManifest } from "./fixtures/manifest";
 import type {
 	ChainedAuthHandlers,
 	Session,
@@ -899,6 +900,8 @@ describe("HTTP Transport Auth Routes", () => {
 
 		let authorizeCalled = false;
 		app = mcp({
+			pluginManifest: { ...pluginManifest, mcpUrl: `http://localhost:${testPort}/mcp` },
+			catalog: { grant_type: "authorization_code" },
 			name: "test-server",
 			version: "1.0.0",
 			chainedAuth: {
@@ -937,6 +940,8 @@ describe("HTTP Transport Auth Routes", () => {
 
 		let callbackCalled = false;
 		app = mcp({
+			pluginManifest: { ...pluginManifest, mcpUrl: `http://localhost:${testPort}/mcp` },
+			catalog: { grant_type: "authorization_code" },
 			name: "test-server",
 			version: "1.0.0",
 			chainedAuth: {
@@ -973,6 +978,8 @@ describe("HTTP Transport Auth Routes", () => {
 
 		let tokenCalled = false;
 		app = mcp({
+			pluginManifest: { ...pluginManifest, mcpUrl: `http://localhost:${testPort}/mcp` },
+			catalog: { grant_type: "authorization_code" },
 			name: "test-server",
 			version: "1.0.0",
 			chainedAuth: {
@@ -1015,6 +1022,8 @@ describe("HTTP Transport Auth Routes", () => {
 		const testPort = 9879; // Use different port to avoid conflicts
 
 		app = mcp({
+			pluginManifest: { ...pluginManifest, mcpUrl: `http://localhost:${testPort}/mcp` },
+			catalog: { grant_type: "authorization_code" },
 			name: "test-server",
 			version: "1.0.0",
 			chainedAuth: {
@@ -1042,6 +1051,8 @@ describe("HTTP Transport Auth Routes", () => {
 		const testPort = 9880; // Use different port to avoid conflicts
 
 		app = mcp({
+			pluginManifest: { ...pluginManifest, mcpUrl: `http://localhost:${testPort}/mcp` },
+			catalog: { grant_type: "authorization_code" },
 			name: "test-server",
 			version: "1.0.0",
 			chainedAuth: {

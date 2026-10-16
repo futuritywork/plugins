@@ -5,40 +5,42 @@ import { forwardedAuth, requireAccessToken, tokenEndpoint } from "./auth";
 const PORT = Number(process.env.PORT ?? 3000);
 
 // Futurity reads the manifest and calls the tools from its own servers, so the
-// URLs the manifest publishes must be the ones Futurity can reach.
+// URLs the manifest and catalog publish must be the ones Futurity can reach.
 const PUBLIC_URL = process.env.PUBLIC_URL ?? `http://localhost:${PORT}`;
 const TOKEN_PATH = "/oauth/token";
 
 const signingKey = process.env.FUTURITY_SIGNING_KEY;
 if (!signingKey) {
-  console.warn(
-    "FUTURITY_SIGNING_KEY is not set, so /.well-known/futurity/plugin is not served.\n" +
-      "Run `bun run keygen`, put the private key in .env, and restart to register this plugin.",
+  throw new Error(
+    "FUTURITY_SIGNING_KEY is required. Run `bun run keygen`, put the private key in .env, and restart.",
   );
 }
 
-const manifest: PluginManifestOptions | undefined = signingKey
-  ? {
-      specVersion: 3,
-      pluginId: "{{slug}}",
-      name: "{{name}}",
-      version: "0.1.0",
-      mcpUrl: `${PUBLIC_URL}/mcp`,
-      auth: {
-        type: "forwarding",
-        grantType: "client_credentials",
-        tokenEndpoint: `${PUBLIC_URL}${TOKEN_PATH}`,
-        requiredScopes: [],
-        deliveryMethod: "header",
-      },
-      signingKey,
-    }
-  : undefined;
+const manifest: PluginManifestOptions = {
+  specVersion: 3,
+  pluginId: "{{slug}}",
+  name: "{{name}}",
+  version: "0.1.0",
+  mcpUrl: `${PUBLIC_URL}/mcp`,
+  auth: {
+    type: "forwarding",
+    grantType: "client_credentials",
+    tokenEndpoint: `${PUBLIC_URL}${TOKEN_PATH}`,
+    requiredScopes: [],
+    deliveryMethod: "header",
+  },
+  signingKey,
+};
 
 const app = mcp({
   name: "{{slug}}",
   version: "0.1.0",
   pluginManifest: manifest,
+  catalog: {
+    grant_type: "client_credentials",
+    plugin_base_url: PUBLIC_URL,
+    token_url: `${PUBLIC_URL}${TOKEN_PATH}`,
+  },
 });
 
 app.use(cors()).middleware(tokenEndpoint(TOKEN_PATH)).middleware(forwardedAuth);

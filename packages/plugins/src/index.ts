@@ -1,4 +1,5 @@
 export * from "./app";
+export * from "./catalog";
 export * from "./chainedAuth";
 export * from "./cors";
 export * from "./oauth";

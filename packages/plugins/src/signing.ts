@@ -32,6 +32,7 @@ function base64urlDecode(str: string): Buffer {
 /**
  * Sign a JSON payload using Ed25519 with JWS Detached Content format.
  * Returns a compact JWS string: `header..signature` (no payload section).
+ * Throws if the base64 PKCS8 DER private key is invalid or is not Ed25519.
  */
 export function signPayload(payload: string, privateKeyBase64: string): string {
 	const header = { alg: "EdDSA", b64: false, crit: ["b64"] };
@@ -48,6 +49,10 @@ export function signPayload(payload: string, privateKeyBase64: string): string {
 		format: "der",
 		type: "pkcs8",
 	});
+
+	if (key.asymmetricKeyType !== "ed25519") {
+		throw new Error("Signing key must be an Ed25519 private key");
+	}
 
 	const signature = sign(null, signingInput, key);
 	const signatureB64 = base64url(signature);

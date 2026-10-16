@@ -1,17 +1,28 @@
 # {{name}}
 
 A Futurity MCP plugin. It serves tools over MCP, and a signed manifest that
-Futurity checks before it trusts them.
+Futurity checks before it trusts them. The required public listing is served at
+`GET /api/catalog`. Edit `catalog` in `src/index.ts` with public metadata only;
+never include credentials or private keys. Its `slug`, `name`, and `mcp_url` come
+from the required manifest, overriding any stale values in imported catalog JSON.
+The manifest's `mcpUrl` uses `PUBLIC_URL` (localhost during development, your
+public HTTPS address when deployed). Keep `grant_type` and other catalog metadata
+explicit.
 
 ## Run it
 
 ```bash
 cp .env.example .env
-bun run keygen          # writes a keypair; put the private half in .env
+bun run keygen          # prints a keypair; put the private half in .env
 bun run dev             # http://localhost:3000/mcp
 ```
 
-With `FUTURITY_SIGNING_KEY` set, the manifest is served at
+Key generation and setting `FUTURITY_SIGNING_KEY` are prerequisites, even for
+local development. Startup fails if the key is absent or invalid; the app never
+automatically generates a production key. Keep the private key secret and stable
+across restarts; register only its public half.
+
+The manifest is served at
 `/.well-known/futurity/plugin` with its detached signature in the
 `X-Futurity-Signature` header:
 
@@ -46,6 +57,6 @@ flow — are in the plugin authentication reference.
 
 | File | What lives there |
 | --- | --- |
-| `src/index.ts` | The manifest, the middleware wiring, and your tools |
+| `src/index.ts` | The manifest, public catalog, middleware wiring, and your tools |
 | `src/auth.ts` | The token endpoint and the per-request credentials |
 | `scripts/keygen.ts` | The Ed25519 keypair generator |

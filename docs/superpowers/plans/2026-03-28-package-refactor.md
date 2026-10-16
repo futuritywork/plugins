@@ -1,5 +1,10 @@
 # @futurity/plugins Package Refactor — Implementation Plan
 
+> Historical plan: code snippets below predate the required signed manifest API.
+> Current apps require `pluginManifest` with a valid signing key and `catalog`
+> with explicit `grant_type`; catalog identity comes from the manifest. Follow the
+> [current API and key setup](../../../README.md#basic-usage) when implementing.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Refactor the plugins repo from a fork-and-build template into a Bun workspace monorepo with two publishable packages: `@futurity/plugins` (the library) and `create-futurity-plugin` (the scaffolder).
@@ -280,6 +285,8 @@ Create `packages/plugins/src/app.test.ts`:
 import { test, expect, describe, afterEach } from "bun:test";
 import { mcp } from "./app";
 
+const catalog = { slug: "test", name: "Test", grant_type: "none", mcp_url: "http://localhost/mcp" };
+
 describe("McpApp.fetch", () => {
   let app: ReturnType<typeof mcp>;
 
@@ -288,12 +295,12 @@ describe("McpApp.fetch", () => {
   });
 
   test("fetch is a function on the app instance", () => {
-    app = mcp({ name: "test", version: "1.0.0" });
+    app = mcp({ name: "test", version: "1.0.0", catalog });
     expect(typeof app.fetch).toBe("function");
   });
 
   test("fetch handles well-known health check", async () => {
-    app = mcp({ name: "test", version: "1.0.0" });
+    app = mcp({ name: "test", version: "1.0.0", catalog });
 
     const req = new Request("http://localhost/.well-known/health-check");
     const res = await app.fetch(req);
@@ -303,7 +310,7 @@ describe("McpApp.fetch", () => {
   });
 
   test("fetch handles MCP initialization", async () => {
-    app = mcp({ name: "test", version: "1.0.0" });
+    app = mcp({ name: "test", version: "1.0.0", catalog });
     app.tool("hello", {
       description: "Say hello",
       handler: async () => ({ message: "hi" }),
@@ -333,7 +340,7 @@ describe("McpApp.fetch", () => {
   });
 
   test("fetch returns 404 for unknown paths", async () => {
-    app = mcp({ name: "test", version: "1.0.0" });
+    app = mcp({ name: "test", version: "1.0.0", catalog });
 
     const req = new Request("http://localhost/unknown");
     const res = await app.fetch(req);
@@ -342,7 +349,7 @@ describe("McpApp.fetch", () => {
   });
 
   test("listen() still works as before", async () => {
-    app = mcp({ name: "test", version: "1.0.0" });
+    app = mcp({ name: "test", version: "1.0.0", catalog });
     app.tool("ping", {
       description: "Ping",
       handler: async () => ({ pong: true }),
@@ -774,6 +781,7 @@ import { mcp, t } from "@futurity/plugins";
 const app = mcp({
   name: "my-plugin",
   version: "0.1.0",
+  catalog: { slug: "my-plugin", name: "My Plugin", grant_type: "none", mcp_url: "http://localhost:3000/mcp" },
 });
 
 app.tool("hello", {
@@ -1013,6 +1021,7 @@ import { mcp, t } from "@futurity/plugins";
 const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
+  catalog: { slug: "my-plugin", name: "My Plugin", grant_type: "none", mcp_url: "http://localhost:3000/mcp" },
 });
 
 app.tool("hello", {

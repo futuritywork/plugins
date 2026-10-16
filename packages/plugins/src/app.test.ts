@@ -1,5 +1,13 @@
 import { test, expect, describe, afterEach } from "bun:test";
 import { mcp } from "./app";
+import { pluginManifest } from "./fixtures/manifest";
+
+const catalog = {
+  slug: "test",
+  name: "Test",
+  grant_type: "none",
+  mcp_url: "http://localhost/mcp",
+};
 
 describe("McpApp.fetch", () => {
   let app: ReturnType<typeof mcp>;
@@ -9,12 +17,12 @@ describe("McpApp.fetch", () => {
   });
 
   test("fetch is a function on the app instance", () => {
-    app = mcp({ name: "test", version: "1.0.0" });
+    app = mcp({ name: "test", version: "1.0.0", catalog, pluginManifest });
     expect(typeof app.fetch).toBe("function");
   });
 
   test("fetch handles well-known health check", async () => {
-    app = mcp({ name: "test", version: "1.0.0" });
+    app = mcp({ name: "test", version: "1.0.0", catalog, pluginManifest });
 
     const req = new Request("http://localhost/.well-known/health-check");
     const res = await app.fetch(req);
@@ -24,7 +32,7 @@ describe("McpApp.fetch", () => {
   });
 
   test("fetch handles MCP initialization", async () => {
-    app = mcp({ name: "test", version: "1.0.0" });
+    app = mcp({ name: "test", version: "1.0.0", catalog, pluginManifest });
     app.tool("hello", {
       description: "Say hello",
       handler: async () => ({ message: "hi" }),
@@ -54,7 +62,7 @@ describe("McpApp.fetch", () => {
   });
 
   test("fetch returns 404 for unknown paths", async () => {
-    app = mcp({ name: "test", version: "1.0.0" });
+    app = mcp({ name: "test", version: "1.0.0", catalog, pluginManifest });
 
     const req = new Request("http://localhost/unknown");
     const res = await app.fetch(req);
@@ -63,7 +71,7 @@ describe("McpApp.fetch", () => {
   });
 
   test("listen() still works as before", async () => {
-    app = mcp({ name: "test", version: "1.0.0" });
+    app = mcp({ name: "test", version: "1.0.0", catalog, pluginManifest });
     app.tool("ping", {
       description: "Ping",
       handler: async () => ({ pong: true }),

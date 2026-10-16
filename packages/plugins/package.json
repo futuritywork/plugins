@@ -1,6 +1,6 @@
 {
   "name": "@futurity/plugins",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "type": "module",
   "description": "A minimal MCP (Model Context Protocol) server library for Bun with auth forwarding support",
   "author": "Futurity",

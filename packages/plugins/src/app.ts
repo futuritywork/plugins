@@ -5,6 +5,7 @@ import type {
 	ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { createCatalogHandler, type CatalogOptions } from "./catalog";
 import { createChainedAuthRouter } from "./chainedAuth";
 import { OAuthOptionsSchema, type OAuthOptions } from "./oauth";
 import {
@@ -60,7 +61,10 @@ export interface McpAppOptions {
 	capabilities?: ServerOptions["capabilities"];
 	instructions?: ServerOptions["instructions"];
 	oauth?: OAuthOptions;
-	pluginManifest?: PluginManifestOptions;
+	/** Required signed manifest. Validated and snapshotted at construction, including its signing key. */
+	pluginManifest: PluginManifestOptions;
+	/** Required public GET /api/catalog metadata; identity comes from pluginManifest. Validated at construction. */
+	catalog: CatalogOptions;
 	auth?: AuthMiddleware;
 	chainedAuth?: ChainedAuthConfig;
 	path?: string;
@@ -86,13 +90,22 @@ export class McpApp {
 	private _httpHandler?: (req: Request) => Promise<Response>;
 	private _wsTransport?: WebSocketTransport;
 	private _bunServer?: ReturnType<typeof Bun.serve>;
+	private catalogHandler: (req: Request) => Response | undefined;
+	private readonly signedManifest: WellKnownEntry;
 
-	constructor(
-		private options: McpAppOptions = {
-			name: "mcp-app",
-			version: "0.1.0",
+	constructor(private options: McpAppOptions) {
+		const manifest = PluginManifestSchema.parse(options.pluginManifest);
+		const signingKey = options.pluginManifest.signingKey;
+		if (typeof signingKey !== "string" || !signingKey.trim()) {
+			throw new Error("pluginManifest.signingKey is required (Ed25519 PKCS8 DER base64)");
 		}
-	) {
+		const payload = JSON.stringify(manifest);
+		this.signedManifest = {
+			// Detach open-ended probe args too, so input mutation cannot invalidate the signature.
+			body: JSON.parse(payload),
+			headers: { "X-Futurity-Signature": signPayload(payload, signingKey) },
+		};
+		this.catalogHandler = createCatalogHandler(options.catalog, manifest);
 		if (options.middleware) {
 			this.middlewares.push(...options.middleware);
 		}
@@ -204,8 +217,10 @@ export class McpApp {
 		return this._httpHandler;
 	}
 
-	private buildWellKnown(): Record<string, WellKnownEntry> | undefined {
-		let wellKnown: Record<string, WellKnownEntry> | undefined;
+	private buildWellKnown(): Record<string, WellKnownEntry> {
+		const wellKnown: Record<string, WellKnownEntry> = {
+			"futurity/plugin": this.signedManifest,
+		};
 
 		if (this.options.oauth) {
 			const oauth = OAuthOptionsSchema.parse(this.options.oauth);
@@ -230,20 +245,7 @@ export class McpApp {
 			if (oauth.userInfoEndpoint)
 				authServer.userinfo_endpoint = oauth.userInfoEndpoint;
 
-			wellKnown = { "oauth-authorization-server": { body: authServer } };
-		}
-
-		if (this.options.pluginManifest) {
-			const { signingKey, ...manifestData } = this.options.pluginManifest;
-			const manifest = PluginManifestSchema.parse(manifestData);
-			const payload = JSON.stringify(manifest);
-			const jws = signPayload(payload, signingKey);
-
-			wellKnown ??= {};
-			wellKnown["futurity/plugin"] = {
-				body: manifest,
-				headers: { "X-Futurity-Signature": jws },
-			};
+			wellKnown["oauth-authorization-server"] = { body: authServer };
 		}
 
 		return wellKnown;
@@ -281,7 +283,7 @@ export class McpApp {
 						runMiddlewares(index + 1, nextReq)
 					);
 				}
-				return this.httpServer!.handleFetch(req);
+				return this.catalogHandler(req) ?? this.httpServer!.handleFetch(req);
 			};
 
 			const response = await runMiddlewares(0, req);
@@ -308,6 +310,7 @@ export class McpApp {
 				wellKnown,
 				auth: this.options.auth,
 				middleware: this.middlewares,
+				publicHandler: this.catalogHandler,
 			});
 			await server.connect(this._wsTransport);
 		} else {
@@ -346,4 +349,4 @@ export class McpApp {
 	}
 }
 
-export const mcp = (options?: McpAppOptions) => new McpApp(options);
+export const mcp = (options: McpAppOptions) => new McpApp(options);

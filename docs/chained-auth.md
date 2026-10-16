@@ -34,16 +34,24 @@ Chained OAuth is a v2 auth option where the plugin manages its own sessions and 
 
 ## Plugin Manifest (v3)
 
+Every app requires a signed manifest and catalog metadata. Before startup, generate
+an Ed25519 keypair and set `FUTURITY_SIGNING_KEY` to its PKCS8 DER base64 private
+key; missing or invalid keys fail construction. The separate `PLUGIN_SIGNING_KEY`
+below is PEM for chained session JWTs. See [key setup](../README.md#basic-usage).
+Catalog identity comes from the manifest, overriding optional stale JSON identity
+fields; `grant_type` and other metadata remain explicit.
+
 ```typescript
 const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
+  catalog: { grant_type: "authorization_code" },
   pluginManifest: {
     specVersion: 3,
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",
-    signingKey: process.env.PLUGIN_SIGNING_KEY!,
+    signingKey: process.env.FUTURITY_SIGNING_KEY!,
     auth: {
       type: "chained",
       authorizationEndpoint: "https://plugin.example.com/auth/authorize",
@@ -83,10 +91,13 @@ import {
 } from "@futuritywork/plugins";
 
 const sessionStore = new InMemorySessionStore();
+// Define pluginManifest using the v3 manifest above, including its signingKey.
 
 const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
+  pluginManifest,
+  catalog: { grant_type: "authorization_code" },
   chainedAuth: {
     sessionStore,
     platformJwksUrl: "https://platform.example.com/.well-known/jwks.json",
