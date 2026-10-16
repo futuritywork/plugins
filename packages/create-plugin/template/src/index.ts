@@ -19,7 +19,7 @@ if (!signingKey) {
 
 const manifest: PluginManifestOptions | undefined = signingKey
   ? {
-      specVersion: 2,
+      specVersion: 3,
       pluginId: "{{slug}}",
       name: "{{name}}",
       version: "0.1.0",

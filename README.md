@@ -192,7 +192,10 @@ const app = mcp({
 
 ## Authentication
 
-There are two auth modes for Futurity plugins:
+All signed plugin manifests use `specVersion: 3`. See [Manifest v3](docs/manifest-v3.md)
+for migration, public (`none`) auth, and governance metadata.
+
+There are two authenticated modes for Futurity plugins:
 
 | Mode | Description | Use Case |
 |------|-------------|----------|
@@ -218,7 +221,7 @@ const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
   pluginManifest: {
-    specVersion: 2,
+    specVersion: 3,
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",
@@ -255,7 +258,7 @@ const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
   pluginManifest: {
-    specVersion: 2,
+    specVersion: 3,
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",

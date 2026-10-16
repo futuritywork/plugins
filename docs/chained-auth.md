@@ -32,14 +32,14 @@ Chained OAuth is a v2 auth option where the plugin manages its own sessions and 
      │                 │                 │                 │
 ```
 
-## Plugin Manifest (v2)
+## Plugin Manifest (v3)
 
 ```typescript
 const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
   pluginManifest: {
-    specVersion: 2,
+    specVersion: 3,
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",
@@ -432,29 +432,12 @@ GET /.well-known/jwks.json
 }
 ```
 
-## Migration from Auth Forwarding (v1)
+## Manifest version migration
 
-The v1 `authForwarding` format is still supported for backward compatibility:
+Both forwarding and chained authentication use `specVersion: 3`.
+Legacy v1/v2 manifests and the `authForwarding` field are no longer accepted.
+Replace `authForwarding` with `auth: { type: "forwarding", ... }` and set
+`specVersion: 3`. Use `PluginManifestSchema` instead of the removed
+`PluginManifestSchemaV1` and `PluginManifestSchemaCompat` exports.
 
-```typescript
-// v1 format (still works)
-{
-  specVersion: 1,
-  authForwarding: {
-    tokenEndpoint: "...",
-    authorizationEndpoint: "...",
-  }
-}
-
-// v2 format (recommended)
-{
-  specVersion: 2,
-  auth: {
-    type: "forwarding",  // or "chained"
-    tokenEndpoint: "...",
-    authorizationEndpoint: "...",
-  }
-}
-```
-
-The `PluginManifestSchemaCompat` automatically transforms v1 manifests to v2 format internally.
+See [Manifest v3](manifest-v3.md) for governance and public-plugin declarations.

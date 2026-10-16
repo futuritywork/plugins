@@ -9,7 +9,6 @@ import { createChainedAuthRouter } from "./chainedAuth";
 import { OAuthOptionsSchema, type OAuthOptions } from "./oauth";
 import {
 	PluginManifestSchema,
-	PluginManifestSchemaCompat,
 	type PluginManifestOptions,
 } from "./pluginManifest";
 import { signPayload } from "./signing";
@@ -236,8 +235,7 @@ export class McpApp {
 
 		if (this.options.pluginManifest) {
 			const { signingKey, ...manifestData } = this.options.pluginManifest;
-			// Use compat schema to support both v1 and v2 manifest formats
-			const manifest = PluginManifestSchemaCompat.parse(manifestData);
+			const manifest = PluginManifestSchema.parse(manifestData);
 			const payload = JSON.stringify(manifest);
 			const jws = signPayload(payload, signingKey);
 

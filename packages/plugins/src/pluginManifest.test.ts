@@ -1,15 +1,15 @@
 import { test, expect, describe } from "bun:test";
 import {
 	PluginManifestSchema,
-	PluginManifestSchemaCompat,
-	PluginManifestSchemaV1,
 	AuthForwardingSchema,
 	ChainedAuthSchema,
+	GovernanceSchema,
+	type ChainedAuth,
+	type Governance,
 } from "./pluginManifest";
 
-// v2 manifest with forwarding auth (new format)
-const validManifestV2Forwarding = {
-	specVersion: 2,
+const validManifest = {
+	specVersion: 3,
 	pluginId: "monday",
 	name: "monday.com MCP Server",
 	version: "1.0.0",
@@ -17,415 +17,278 @@ const validManifestV2Forwarding = {
 		type: "forwarding" as const,
 		tokenEndpoint: "https://auth.monday.com/oauth2/token",
 		authorizationEndpoint: "https://auth.monday.com/oauth2/authorize",
-		requiredScopes: [
-			"me:read",
-			"boards:read",
-			"boards:write",
-			"workspaces:read",
-			"updates:read",
-			"updates:write",
-		],
+		requiredScopes: ["me:read", "boards:read", "boards:write"],
 		deliveryMethod: "header" as const,
 	},
 	mcpUrl: "https://mcp.example.com/mcp",
 };
 
-// v2 manifest with chained auth
-const validManifestV2Chained = {
-	specVersion: 2,
-	pluginId: "monday-chained",
-	name: "monday.com MCP Server (Chained)",
-	version: "1.0.0",
-	auth: {
-		type: "chained" as const,
-		authorizationEndpoint: "https://plugin.example.com/auth/authorize",
-		callbackEndpoint: "https://plugin.example.com/auth/callback",
-		tokenEndpoint: "https://plugin.example.com/auth/token",
-		requiredUserContext: ["user_id", "organization_id"] as const,
-		externalServices: [
-			{
-				name: "Monday.com",
-				authorizationEndpoint: "https://auth.monday.com/oauth2/authorize",
-				requiredScopes: ["me:read", "boards:read"],
-			},
-		],
-		sessionConfig: {
-			maxSessionDuration: 86400000,
-			supportsRefresh: true,
+const chainedAuth = {
+	type: "chained" as const,
+	authorizationEndpoint: "https://plugin.example.com/auth/authorize",
+	callbackEndpoint: "https://plugin.example.com/auth/callback",
+	tokenEndpoint: "https://plugin.example.com/auth/token",
+	requiredUserContext: ["user_id", "organization_id"],
+	externalServices: [{
+		name: "Monday.com",
+		authorizationEndpoint: "https://auth.monday.com/oauth2/authorize",
+		requiredScopes: ["me:read", "boards:read"],
+	}],
+	sessionConfig: { maxSessionDuration: 86400000, supportsRefresh: true },
+} satisfies ChainedAuth;
+
+const governance = {
+	timezone: "America/New_York",
+	purpose: "Manage projects and their owners",
+	credential: "organization",
+	defaultAccess: "restricted",
+	restrictedByDefault: ["projects"],
+	datasets: {
+		people: {
+			title: "People",
+			fields: [{ name: "id", type: "string", identifier: "person", nullable: false }],
+		},
+		projects: {
+			title: "Projects",
+			description: "Active projects",
+			group: "Work",
+			paths: ["/projects"],
+			fields: [
+				{ name: "owner", type: "string", references: { dataset: "people", field: "id" }, nullable: true },
+				{ name: "due", type: "datetime", clock: "wall" },
+				{ name: "created", type: "datetime", clock: "instant" },
+				{ name: "duration", type: "number", unit: "seconds" },
+			],
+			probe: { tool: "list_projects", args: { limit: 1, filter: { active: true } } },
 		},
 	},
-	mcpUrl: "https://mcp.example.com/mcp",
-};
+} satisfies Governance;
 
-// v1 manifest (legacy format with authForwarding)
-const validManifestV1 = {
-	specVersion: 1,
-	pluginId: "monday",
-	name: "monday.com MCP Server",
-	version: "1.0.0",
-	authForwarding: {
-		tokenEndpoint: "https://auth.monday.com/oauth2/token",
-		authorizationEndpoint: "https://auth.monday.com/oauth2/authorize",
-		requiredScopes: [
-			"me:read",
-			"boards:read",
-			"boards:write",
-			"workspaces:read",
-			"updates:read",
-			"updates:write",
-		],
-		deliveryMethod: "header" as const,
-	},
-	mcpUrl: "https://mcp.example.com/mcp",
-};
-
-describe("PluginManifestSchema v2", () => {
-	test("accepts a valid v2 manifest with forwarding auth", () => {
-		const result = PluginManifestSchema.parse(validManifestV2Forwarding);
+describe("PluginManifestSchema v3", () => {
+	test("accepts a v3 manifest", () => {
+		const result = PluginManifestSchema.parse(validManifest);
+		expect(result.specVersion).toBe(3);
 		expect(result.pluginId).toBe("monday");
-		expect(result.specVersion).toBe(2);
-		expect(result.auth.type).toBe("forwarding");
-		if (result.auth.type === "forwarding") {
-			expect(result.auth.tokenEndpoint).toBe(
-				"https://auth.monday.com/oauth2/token"
-			);
+		expect(result.auth).toEqual({ ...validManifest.auth, grantType: "authorization_code" });
+		expect(result.governance).toBeUndefined();
+		expect(result.icon).toBeUndefined();
+	});
+
+	test("preserves complete chained auth config", () => {
+		const result = PluginManifestSchema.parse({ ...validManifest, auth: chainedAuth });
+		expect(result.auth).toEqual(chainedAuth);
+	});
+
+	test("applies defaults to minimal chained auth", () => {
+		const auth = {
+			type: "chained" as const,
+			authorizationEndpoint: chainedAuth.authorizationEndpoint,
+			callbackEndpoint: chainedAuth.callbackEndpoint,
+		};
+		const result = PluginManifestSchema.parse({ ...validManifest, auth });
+		expect(result.auth).toEqual({ ...auth, requiredUserContext: ["user_id"] });
+	});
+
+	test.each([undefined, "header", "query"])("accepts no auth with deliveryMethod %s", (deliveryMethod) => {
+		const auth = { type: "none" as const, ...(deliveryMethod && { deliveryMethod }) };
+		const result = PluginManifestSchema.parse({ ...validManifest, auth });
+		expect(result.auth).toEqual(auth);
+	});
+
+	test.each([0, 1, 2, 4, "3", undefined])("rejects specVersion %s", (specVersion) => {
+		expect(PluginManifestSchema.safeParse({ ...validManifest, specVersion }).success).toBe(false);
+	});
+
+	test("rejects legacy authForwarding manifests", () => {
+		const { auth, ...manifest } = validManifest;
+		const { type, ...authForwarding } = auth;
+		for (const specVersion of [1, 2, 3]) {
+			expect(PluginManifestSchema.safeParse({ ...manifest, specVersion, authForwarding }).success).toBe(false);
 		}
 	});
 
-	test("accepts a valid v2 manifest with chained auth", () => {
-		const result = PluginManifestSchema.parse(validManifestV2Chained);
-		expect(result.pluginId).toBe("monday-chained");
-		expect(result.specVersion).toBe(2);
-		expect(result.auth.type).toBe("chained");
-		if (result.auth.type === "chained") {
-			expect(result.auth.authorizationEndpoint).toBe(
-				"https://plugin.example.com/auth/authorize"
-			);
-			expect(result.auth.callbackEndpoint).toBe(
-				"https://plugin.example.com/auth/callback"
-			);
-			expect(result.auth.externalServices).toHaveLength(1);
-			expect(result.auth.sessionConfig?.supportsRefresh).toBe(true);
+	test.each(["v1", "1.0", "1.0.0-beta", "1.0.0+build", ""])("rejects non-producer version %s", (version) => {
+		expect(PluginManifestSchema.safeParse({ ...validManifest, version }).success).toBe(false);
+	});
+
+	test.each([
+		{ pluginId: "" },
+		{ name: "" },
+		{ mcpUrl: "not-a-url" },
+		{ icon: 123 },
+		{ auth: { ...validManifest.auth, type: "oauth" } },
+		{ auth: { ...validManifest.auth, deliveryMethod: "cookie" } },
+		{ auth: { type: "none", deliveryMethod: "cookie" } },
+		{ auth: { ...chainedAuth, callbackEndpoint: undefined } },
+		{ auth: { ...chainedAuth, requiredUserContext: ["invalid_field"] } },
+	])("rejects invalid manifest fields %j", (invalid) => {
+		expect(PluginManifestSchema.safeParse({ ...validManifest, ...invalid }).success).toBe(false);
+	});
+
+	test("preserves governance and an optional icon string", () => {
+		const result = PluginManifestSchema.parse({ ...validManifest, governance, icon: "📋" });
+		expect(result.governance).toEqual(governance);
+		expect(result.icon).toBe("📋");
+	});
+
+	test.each(["client_credentials", "urn:ietf:params:oauth:grant-type:saml2-bearer"])("accepts admin grant %s without redirect", (grantType) => {
+		const result = PluginManifestSchema.parse({
+			...validManifest,
+			auth: { type: "forwarding", tokenEndpoint: validManifest.auth.tokenEndpoint, grantType },
+		});
+		expect(result.auth).toEqual({
+			type: "forwarding", tokenEndpoint: validManifest.auth.tokenEndpoint,
+			grantType, requiredScopes: [], deliveryMethod: "header",
+		});
+	});
+
+	test.each([undefined, "authorization_code"])("requires authorizationEndpoint for grant %s", (grantType) => {
+		const result = PluginManifestSchema.safeParse({
+			...validManifest,
+			auth: { type: "forwarding", tokenEndpoint: validManifest.auth.tokenEndpoint, grantType },
+		});
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues).toContainEqual(expect.objectContaining({
+				path: ["auth", "authorizationEndpoint"],
+				message: "authorizationEndpoint is required when grantType is authorization_code",
+			}));
 		}
 	});
 
-	test("applies defaults for optional chained auth fields", () => {
-		const minimal = {
-			specVersion: 2,
-			pluginId: "test",
-			name: "Test Plugin",
-			version: "1.0.0",
-			auth: {
-				type: "chained" as const,
-				authorizationEndpoint: "https://plugin.example.com/auth/authorize",
-				callbackEndpoint: "https://plugin.example.com/auth/callback",
-			},
-			mcpUrl: "https://mcp.example.com/mcp",
-		};
-		const result = PluginManifestSchema.parse(minimal);
-		expect(result.auth.type).toBe("chained");
-		if (result.auth.type === "chained") {
-			expect(result.auth.requiredUserContext).toEqual(["user_id"]);
-			expect(result.auth.externalServices).toBeUndefined();
-			expect(result.auth.tokenEndpoint).toBeUndefined();
-		}
-	});
-
-	test("rejects specVersion 0", () => {
-		const invalid = { ...validManifestV2Forwarding, specVersion: 0 };
-		expect(() => PluginManifestSchema.parse(invalid)).toThrow();
-	});
-
-	test("rejects specVersion 3", () => {
-		const invalid = { ...validManifestV2Forwarding, specVersion: 3 };
-		expect(() => PluginManifestSchema.parse(invalid)).toThrow();
-	});
-
-	test("rejects invalid auth type", () => {
-		const invalid = {
-			...validManifestV2Forwarding,
-			auth: { ...validManifestV2Forwarding.auth, type: "oauth" },
-		};
-		expect(() => PluginManifestSchema.parse(invalid)).toThrow();
-	});
-
-	test("rejects chained auth without required endpoints", () => {
-		const invalid = {
-			specVersion: 2,
-			pluginId: "test",
-			name: "Test Plugin",
-			version: "1.0.0",
-			auth: {
-				type: "chained" as const,
-				authorizationEndpoint: "https://plugin.example.com/auth/authorize",
-				// missing callbackEndpoint
-			},
-			mcpUrl: "https://mcp.example.com/mcp",
-		};
-		expect(() => PluginManifestSchema.parse(invalid)).toThrow();
-	});
-
-	test("rejects invalid requiredUserContext values", () => {
-		const invalid = {
-			...validManifestV2Chained,
-			auth: {
-				...validManifestV2Chained.auth,
-				requiredUserContext: ["user_id", "invalid_field"],
-			},
-		};
-		expect(() => PluginManifestSchema.parse(invalid)).toThrow();
+	test("rejects invalid grantType", () => {
+		expect(PluginManifestSchema.safeParse({
+			...validManifest, auth: { ...validManifest.auth, grantType: "password" },
+		}).success).toBe(false);
 	});
 });
 
-describe("PluginManifestSchemaV1 (legacy)", () => {
-	test("accepts a valid v1 manifest", () => {
-		const result = PluginManifestSchemaV1.parse(validManifestV1);
-		expect(result.pluginId).toBe("monday");
-		expect(result.specVersion).toBe(1);
-		expect(result.authForwarding.tokenEndpoint).toBe(
-			"https://auth.monday.com/oauth2/token"
-		);
+describe("GovernanceSchema", () => {
+	test.each(["organization", "user"])("accepts credential %s and empty dataset collection", (credential) => {
+		expect(GovernanceSchema.parse({ credential, datasets: {} })).toEqual({ credential, datasets: {} });
 	});
 
-	test("rejects v1 manifest with specVersion 2", () => {
-		const invalid = { ...validManifestV1, specVersion: 2 };
-		expect(() => PluginManifestSchemaV1.parse(invalid)).toThrow();
+	test("preserves omitted nullable as unknown", () => {
+		const result = GovernanceSchema.parse(governance);
+		expect(result.datasets.projects?.fields?.[1]?.nullable).toBeUndefined();
 	});
 
-	test("applies defaults for optional authForwarding fields", () => {
-		const minimal = {
-			specVersion: 1,
-			pluginId: "test",
-			name: "Test Plugin",
-			version: "1.0.0",
-			mcpUrl: "https://mcp.example.com/mcp",
-			authForwarding: {
-				tokenEndpoint: "https://auth.example.com/token",
-				authorizationEndpoint: "https://auth.example.com/authorize",
+	test.each(["", "project.items", "project items", "project\titems", "project\nitems"])("rejects dataset id %j", (id) => {
+		expect(() => GovernanceSchema.parse({
+			credential: "user", datasets: { [id]: governance.datasets.people },
+		})).toThrow("Data set id");
+	});
+
+	test.each([{ fields: undefined }, { fields: [] }])("rejects fieldless datasets (%j)", ({ fields }) => {
+		expect(() => GovernanceSchema.parse({
+			credential: "user", datasets: { people: { title: "People", fields } },
+		})).toThrow("declares no fields");
+	});
+
+	test.each([
+		{ dataset: "missing", field: "id" },
+		{ dataset: "people", field: "missing" },
+	])("rejects undeclared reference %j", (references) => {
+		expect(() => GovernanceSchema.parse({
+			...governance,
+			datasets: {
+				...governance.datasets,
+				projects: { title: "Projects", fields: [{ name: "owner", type: "string", references }] },
 			},
-		};
-		const result = PluginManifestSchemaV1.parse(minimal);
-		expect(result.authForwarding.requiredScopes).toEqual([]);
-		expect(result.authForwarding.deliveryMethod).toBe("header");
-		expect(result.authForwarding.maxTokenTtl).toBeUndefined();
-	});
-});
-
-describe("PluginManifestSchemaCompat (backward compatibility)", () => {
-	test("accepts v2 manifest with forwarding auth", () => {
-		const result = PluginManifestSchemaCompat.parse(validManifestV2Forwarding);
-		expect(result.specVersion).toBe(2);
-		expect(result.auth.type).toBe("forwarding");
+		})).toThrow("a field references a data set or field that is not declared");
 	});
 
-	test("accepts v2 manifest with chained auth", () => {
-		const result = PluginManifestSchemaCompat.parse(validManifestV2Chained);
-		expect(result.specVersion).toBe(2);
-		expect(result.auth.type).toBe("chained");
+	test("rejects restrictions on undeclared datasets", () => {
+		expect(() => GovernanceSchema.parse({ ...governance, restrictedByDefault: ["missing"] }))
+			.toThrow("restrictedByDefault names a data set that is not declared");
 	});
 
-	test("accepts v1 manifest and transforms to v2 format", () => {
-		const result = PluginManifestSchemaCompat.parse(validManifestV1);
-		expect(result.specVersion).toBe(1);
-		expect(result.auth.type).toBe("forwarding");
-		if (result.auth.type === "forwarding") {
-			expect(result.auth.tokenEndpoint).toBe(
-				"https://auth.monday.com/oauth2/token"
-			);
-		}
+	test("validates governance through the manifest boundary", () => {
+		expect(() => PluginManifestSchema.parse({
+			...validManifest, governance: { ...governance, restrictedByDefault: ["missing"] },
+		})).toThrow("restrictedByDefault names a data set that is not declared");
 	});
 
-	test("rejects invalid version format", () => {
-		const invalid = { ...validManifestV2Forwarding, version: "v1" };
-		expect(() => PluginManifestSchemaCompat.parse(invalid)).toThrow();
+	test.each([
+		{ credential: "team" }, { credential: undefined },
+		{ timezone: "" }, { purpose: "" }, { defaultAccess: "private" },
+	])("rejects invalid governance properties %j", (invalid) => {
+		expect(GovernanceSchema.safeParse({ ...governance, ...invalid }).success).toBe(false);
 	});
 
-	test("rejects invalid mcpUrl", () => {
-		const invalid = { ...validManifestV2Forwarding, mcpUrl: "not-a-url" };
-		expect(() => PluginManifestSchemaCompat.parse(invalid)).toThrow();
+	test.each([
+		{ title: "" }, { paths: [""] }, { probe: { tool: "", args: {} } },
+		{ probe: { tool: "list_people", args: [] } },
+	])("rejects invalid dataset properties %j", (invalid) => {
+		expect(GovernanceSchema.safeParse({
+			credential: "user", datasets: { people: { ...governance.datasets.people, ...invalid } },
+		}).success).toBe(false);
 	});
 
-	test("rejects empty pluginId", () => {
-		const invalid = { ...validManifestV2Forwarding, pluginId: "" };
-		expect(() => PluginManifestSchemaCompat.parse(invalid)).toThrow();
-	});
-
-	test("rejects invalid deliveryMethod in forwarding auth", () => {
-		const invalid = {
-			...validManifestV2Forwarding,
-			auth: {
-				...validManifestV2Forwarding.auth,
-				deliveryMethod: "cookie",
-			},
-		};
-		expect(() => PluginManifestSchemaCompat.parse(invalid)).toThrow();
+	test.each([
+		{ name: "" }, { type: "" }, { identifier: "" }, { unit: "" },
+		{ nullable: "unknown" }, { clock: "local" },
+		{ references: { dataset: "", field: "id" } },
+		{ references: { dataset: "people", field: "" } },
+	])("rejects invalid field properties %j", (invalid) => {
+		expect(GovernanceSchema.safeParse({
+			credential: "user",
+			datasets: { people: { title: "People", fields: [{ name: "id", type: "string", ...invalid }] } },
+		}).success).toBe(false);
 	});
 });
 
 describe("AuthForwardingSchema", () => {
-	test("requires type field", () => {
-		const valid = {
-			type: "forwarding" as const,
-			tokenEndpoint: "https://auth.example.com/token",
-			authorizationEndpoint: "https://auth.example.com/authorize",
-		};
-		const result = AuthForwardingSchema.parse(valid);
-		expect(result.type).toBe("forwarding");
-	});
-
-	test("defaults grantType to authorization_code", () => {
-		const valid = {
-			type: "forwarding" as const,
-			tokenEndpoint: "https://auth.example.com/token",
-			authorizationEndpoint: "https://auth.example.com/authorize",
-		};
-		const result = AuthForwardingSchema.parse(valid);
+	test("applies defaults", () => {
+		const result = AuthForwardingSchema.parse({
+			type: "forwarding", tokenEndpoint: validManifest.auth.tokenEndpoint,
+		});
 		expect(result.grantType).toBe("authorization_code");
+		expect(result.requiredScopes).toEqual([]);
+		expect(result.deliveryMethod).toBe("header");
+		expect(result.maxTokenTtl).toBeUndefined();
 	});
 
-	test("accepts client_credentials without authorizationEndpoint", () => {
-		const valid = {
-			type: "forwarding" as const,
-			tokenEndpoint: "https://api.ariba.com/v2/oauth/token",
-			grantType: "client_credentials" as const,
-		};
-		const result = AuthForwardingSchema.parse(valid);
-		expect(result.grantType).toBe("client_credentials");
+	test("requires the forwarding type", () => {
+		expect(AuthForwardingSchema.safeParse({ tokenEndpoint: validManifest.auth.tokenEndpoint }).success).toBe(false);
+	});
+
+	test.each(["client_credentials", "urn:ietf:params:oauth:grant-type:saml2-bearer"])("accepts %s without authorizationEndpoint", (grantType) => {
+		const result = AuthForwardingSchema.parse({
+			type: "forwarding", tokenEndpoint: validManifest.auth.tokenEndpoint, grantType,
+		});
+		expect(result.grantType).toBe(grantType);
 		expect(result.authorizationEndpoint).toBeUndefined();
-	});
-
-	test("accepts saml2-bearer without authorizationEndpoint", () => {
-		const valid = {
-			type: "forwarding" as const,
-			tokenEndpoint: "https://dc.successfactors.com/oauth/token",
-			grantType: "urn:ietf:params:oauth:grant-type:saml2-bearer" as const,
-		};
-		const result = AuthForwardingSchema.parse(valid);
-		expect(result.grantType).toBe(
-			"urn:ietf:params:oauth:grant-type:saml2-bearer",
-		);
-		expect(result.authorizationEndpoint).toBeUndefined();
-	});
-});
-
-describe("PluginManifestSchema v2 - admin grant types", () => {
-	test("accepts client_credentials forwarding manifest", () => {
-		const manifest = {
-			specVersion: 2,
-			pluginId: "sap-ariba",
-			name: "SAP Ariba",
-			version: "1.0.0",
-			auth: {
-				type: "forwarding" as const,
-				tokenEndpoint: "https://api.ariba.com/v2/oauth/token",
-				grantType: "client_credentials" as const,
-				deliveryMethod: "header" as const,
-			},
-			mcpUrl: "https://ariba-plugin.example.com/mcp",
-		};
-		const result = PluginManifestSchema.parse(manifest);
-		expect(result.auth.type).toBe("forwarding");
-		if (result.auth.type === "forwarding") {
-			expect(result.auth.grantType).toBe("client_credentials");
-			expect(result.auth.authorizationEndpoint).toBeUndefined();
-		}
-	});
-
-	test("accepts saml2-bearer forwarding manifest", () => {
-		const manifest = {
-			specVersion: 2,
-			pluginId: "sap-successfactors",
-			name: "SAP SuccessFactors",
-			version: "1.0.0",
-			auth: {
-				type: "forwarding" as const,
-				tokenEndpoint: "https://dc.successfactors.com/oauth/token",
-				grantType:
-					"urn:ietf:params:oauth:grant-type:saml2-bearer" as const,
-				deliveryMethod: "header" as const,
-			},
-			mcpUrl: "https://sf-plugin.example.com/mcp",
-		};
-		const result = PluginManifestSchema.parse(manifest);
-		expect(result.auth.type).toBe("forwarding");
-		if (result.auth.type === "forwarding") {
-			expect(result.auth.grantType).toBe(
-				"urn:ietf:params:oauth:grant-type:saml2-bearer",
-			);
-		}
-	});
-
-	test("rejects authorization_code without authorizationEndpoint", () => {
-		const manifest = {
-			specVersion: 2,
-			pluginId: "test",
-			name: "Test",
-			version: "1.0.0",
-			auth: {
-				type: "forwarding" as const,
-				tokenEndpoint: "https://auth.example.com/token",
-				grantType: "authorization_code" as const,
-				// missing authorizationEndpoint
-			},
-			mcpUrl: "https://mcp.example.com/mcp",
-		};
-		expect(() => PluginManifestSchema.parse(manifest)).toThrow(
-			"authorizationEndpoint is required",
-		);
-	});
-
-	test("rejects invalid grantType", () => {
-		const manifest = {
-			specVersion: 2,
-			pluginId: "test",
-			name: "Test",
-			version: "1.0.0",
-			auth: {
-				type: "forwarding" as const,
-				tokenEndpoint: "https://auth.example.com/token",
-				grantType: "password",
-			},
-			mcpUrl: "https://mcp.example.com/mcp",
-		};
-		expect(() => PluginManifestSchema.parse(manifest)).toThrow();
 	});
 });
 
 describe("ChainedAuthSchema", () => {
-	test("validates complete chained auth config", () => {
-		const valid = {
-			type: "chained" as const,
-			authorizationEndpoint: "https://plugin.example.com/auth/authorize",
-			callbackEndpoint: "https://plugin.example.com/auth/callback",
-			tokenEndpoint: "https://plugin.example.com/auth/token",
-			requiredUserContext: ["user_id", "email"] as const,
-			externalServices: [
-				{
-					name: "External API",
-					authorizationEndpoint: "https://external.com/oauth/authorize",
-					requiredScopes: ["read", "write"],
-				},
-			],
-			sessionConfig: {
-				maxSessionDuration: 3600000,
-				supportsRefresh: true,
-			},
-		};
-		const result = ChainedAuthSchema.parse(valid);
-		expect(result.type).toBe("chained");
-		expect(result.requiredUserContext).toEqual(["user_id", "email"]);
-		expect(result.externalServices).toHaveLength(1);
-		expect(result.sessionConfig?.supportsRefresh).toBe(true);
+	test("preserves complete config", () => {
+		expect(ChainedAuthSchema.parse(chainedAuth)).toEqual(chainedAuth);
 	});
 
 	test("applies defaults", () => {
-		const minimal = {
-			type: "chained" as const,
-			authorizationEndpoint: "https://plugin.example.com/auth/authorize",
-			callbackEndpoint: "https://plugin.example.com/auth/callback",
-		};
-		const result = ChainedAuthSchema.parse(minimal);
+		const result = ChainedAuthSchema.parse({
+			type: "chained",
+			authorizationEndpoint: chainedAuth.authorizationEndpoint,
+			callbackEndpoint: chainedAuth.callbackEndpoint,
+			externalServices: [{ name: "External API", authorizationEndpoint: chainedAuth.authorizationEndpoint }],
+			sessionConfig: {},
+		});
+		expect(result.requiredUserContext).toEqual(["user_id"]);
+		expect(result.tokenEndpoint).toBeUndefined();
+		expect(result.externalServices?.[0]?.requiredScopes).toEqual([]);
+		expect(result.sessionConfig?.supportsRefresh).toBe(false);
+	});
+
+	test("keeps optional session and external services absent", () => {
+		const result = ChainedAuthSchema.parse({
+			type: "chained",
+			authorizationEndpoint: chainedAuth.authorizationEndpoint,
+			callbackEndpoint: chainedAuth.callbackEndpoint,
+		});
 		expect(result.requiredUserContext).toEqual(["user_id"]);
 		expect(result.sessionConfig).toBeUndefined();
+		expect(result.externalServices).toBeUndefined();
 	});
 });

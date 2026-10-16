@@ -1,6 +1,8 @@
 # Migration Guide: Auth Forwarding (v1) to Chained Auth (v2)
 
 This guide covers migrating from v1 auth forwarding to v2 chained OAuth authentication.
+These auth-mode labels are independent of the manifest version: both now use
+`specVersion: 3`. See [Manifest v3](manifest-v3.md).
 
 ## When to Migrate
 
@@ -36,7 +38,7 @@ const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
   pluginManifest: {
-    specVersion: 2,
+    specVersion: 3,
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",
@@ -63,7 +65,7 @@ const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
   pluginManifest: {
-    specVersion: 2,
+    specVersion: 3,
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",
