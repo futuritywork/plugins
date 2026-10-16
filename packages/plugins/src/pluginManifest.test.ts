@@ -198,9 +198,18 @@ describe("GovernanceSchema", () => {
 		})).toThrow("a field references a data set or field that is not declared");
 	});
 
-	test("rejects restrictions on undeclared datasets", () => {
-		expect(() => GovernanceSchema.parse({ ...governance, restrictedByDefault: ["missing"] }))
+	test.each(["missing", "constructor", "toString", "__proto__"])("rejects restrictions on undeclared dataset %s", (id) => {
+		expect(() => GovernanceSchema.parse({ ...governance, datasets: {}, restrictedByDefault: [id] }))
 			.toThrow("restrictedByDefault names a data set that is not declared");
+	});
+
+	test.each(["constructor", "toString"])("accepts restrictions on explicitly declared dataset %s", (id) => {
+		const input = {
+			credential: "user",
+			datasets: { [id]: governance.datasets.people },
+			restrictedByDefault: [id],
+		};
+		expect(GovernanceSchema.parse(input)).toEqual(input);
 	});
 
 	test("validates governance through the manifest boundary", () => {

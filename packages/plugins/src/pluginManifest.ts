@@ -121,7 +121,7 @@ export const GovernanceSchema = z
   })
   .refine(
     (data) =>
-      (data.restrictedByDefault ?? []).every((id) => id in data.datasets),
+      (data.restrictedByDefault ?? []).every((id) => Object.hasOwn(data.datasets, id)),
     {
       message: "restrictedByDefault names a data set that is not declared",
       path: ["restrictedByDefault"],
