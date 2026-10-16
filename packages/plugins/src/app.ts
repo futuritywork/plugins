@@ -39,11 +39,18 @@ function buildAnnotations(
 	};
 }
 
+/** Per-call context supplied to tool handlers. */
+export interface ToolContext {
+	/** Aborted on MCP request cancellation or connection closure. Pass to downstream I/O to stop work cooperatively. */
+	signal: AbortSignal;
+}
+
 export interface ToolOptions<I, O> {
 	description?: string;
 	input?: z.ZodType<I>;
+	/** Advertises and parses final object results when JSON-Schema-representable and pipeline-free, applying defaults and object field rules to both response forms; otherwise retains text-only output. */
 	output?: z.ZodType<O>;
-	handler: (input: I) => Promise<O> | O;
+	handler: (input: I, context: ToolContext) => Promise<O> | O;
 	/** Tool danger level. Defaults to "read" if not specified. */
 	dangerLevel?: DangerLevel;
 	/** Whether this tool requires explicit user consent before execution, regardless of the user's permission mode. */
@@ -71,9 +78,31 @@ export interface McpAppOptions {
 	middleware?: Middleware[];
 }
 
+/** Whether MCP can advertise the schema and re-validate the handler's final object. */
+function declaresOutput(schema: z.ZodType<unknown> | undefined): boolean {
+	if (schema?._zod.def.type !== "object") return false;
+	try {
+		z.toJSONSchema(schema, {
+			target: "draft-7",
+			io: "output",
+			unrepresentable: "throw",
+			override: ({ zodSchema }) => {
+				// Output conversion can hide a pipeline's input transforms, which MCP would run again.
+				if (zodSchema._zod.def.type === "pipe") {
+					throw new Error("Output pipelines require text-only results");
+				}
+			},
+		});
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 type ToolRegistration = {
 	name: string;
 	opts: ToolOptions<unknown, unknown>;
+	structured: boolean;
 };
 
 type ResourceRegistration = {
@@ -123,7 +152,7 @@ export class McpApp {
 		const server = new McpServer(serverInfo, serverOptions);
 
 		// Register all tools
-		for (const { name, opts } of this.toolRegistrations) {
+		for (const { name, opts, structured } of this.toolRegistrations) {
 			const annotations = buildAnnotations(opts);
 			const meta: Record<string, unknown> = {};
 			if (opts.dangerLevel) meta["futurity:dangerLevel"] = opts.dangerLevel;
@@ -138,11 +167,22 @@ export class McpApp {
 					inputSchema: opts.input
 						? (opts.input as any).shape || opts.input
 						: undefined,
+					...(structured && { outputSchema: opts.output }),
 					...(annotations && { annotations }),
 					...(Object.keys(meta).length > 0 && { _meta: meta }),
 				},
-				async (input: any) => {
-					const result = await opts.handler(input);
+				async (input: any, extra: ToolContext) => {
+					// The SDK passes context as the first argument for tools without an input schema.
+					const context = opts.input ? extra : input;
+					let result = await opts.handler(input, { signal: context.signal });
+					if (structured) {
+						// MCP validates but discards parsed data; normalize both response forms here.
+						const parsed = await opts.output!.safeParseAsync(result);
+						if (!parsed.success) {
+							throw new Error(`Output validation error: Invalid structured content for tool ${name}: ${parsed.error.message}`);
+						}
+						result = parsed.data;
+					}
 					return {
 						content: [
 							{
@@ -150,6 +190,9 @@ export class McpApp {
 								text: JSON.stringify(result),
 							},
 						],
+						...(structured && {
+							structuredContent: result as Record<string, unknown>,
+						}),
 					};
 				}
 			);
@@ -182,6 +225,7 @@ export class McpApp {
 		this.toolRegistrations.push({
 			name,
 			opts: opts as ToolOptions<unknown, unknown>,
+			structured: declaresOutput(opts.output),
 		});
 		return this;
 	}

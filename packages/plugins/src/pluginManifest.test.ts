@@ -208,7 +208,7 @@ describe("GovernanceSchema", () => {
 			credential: "user",
 			datasets: { [id]: governance.datasets.people },
 			restrictedByDefault: [id],
-		};
+		} satisfies Governance;
 		expect(GovernanceSchema.parse(input)).toEqual(input);
 	});
 
