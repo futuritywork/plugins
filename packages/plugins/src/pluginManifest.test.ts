@@ -397,10 +397,32 @@ describe("manifest credentials", () => {
 		], "urn:ietf:params:oauth:grant-type:saml2-bearer").success).toBe(true);
 	});
 
-	test("authorization_code has no required credential keys", () => {
-		expect(parseCredentials([], "authorization_code").success).toBe(true);
-		expect(parseCredentials([credential], "authorization_code").success).toBe(true);
+	test.each([undefined, null, []].map((fields) => ({ fields })))("authorization_code accepts no fields: %j", ({ fields }) => {
+		expect(parseCredentials(fields, "authorization_code").success).toBe(true);
 	});
+
+	test.each(["authorization_code", undefined])("OAuth rejects credential fields with grant %j", (grantType) => {
+		const result = PluginManifestSchema.safeParse({
+			...validManifest,
+			auth: { ...validManifest.auth, grantType, credentials_schema: [credential] },
+		});
+		expect(result.success).toBe(false);
+		if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({
+			path: ["auth", "credentials_schema"],
+		}));
+	});
+
+	for (const key of ["grant_type", "data_api_params", "token_request_params"]) {
+		test.each(["key", "secondaryKey"] as const)(`rejects reserved ${key} in %s`, (property) => {
+			const field = property === "key" ? { ...credential, key } : { ...keypair, secondaryKey: key };
+			const result = parseCredentials([field]);
+			expect(result.success).toBe(false);
+			if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({
+				path: ["auth", "credentials_schema", 0],
+				message: `Credential key ${key} is reserved`,
+			}));
+		});
+	}
 });
 
 describe("manifest URLs and metadata", () => {

@@ -49,6 +49,13 @@ const IntegrationMetadataSchema = z.object({
     .optional(),
 });
 
+/** Platform-owned credential properties that custom forms must not overwrite. */
+const RESERVED_CREDENTIAL_KEYS = new Set([
+  "grant_type",
+  "data_api_params",
+  "token_request_params",
+]);
+
 const CredentialFieldSchema = z.object({
   key: z.string().min(1),
   label: z.string(),
@@ -81,6 +88,13 @@ const CredentialsSchema = z
         field.key,
         ...(field.secondaryKey !== undefined ? [field.secondaryKey] : []),
       ]) {
+        if (RESERVED_CREDENTIAL_KEYS.has(key)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `Credential key ${key} is reserved`,
+            path: [index],
+          });
+        }
         if (keys.has(key)) {
           ctx.addIssue({
             code: "custom",
@@ -289,6 +303,8 @@ export const PluginManifestSchema = z
       });
     if (grant === "none" && fields?.length)
       issue("A none grant cannot collect credentials");
+    if (grant === "authorization_code" && fields?.length)
+      issue("An authorization_code grant cannot collect credentials");
     if (grant === "credentials" && !fields?.length)
       issue("A credentials grant requires fields");
     // Null/omitted fields use platform defaults; explicit arrays must collect each grant key.
