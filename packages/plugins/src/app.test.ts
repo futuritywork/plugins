@@ -94,7 +94,8 @@ describe("McpApp tool outputs", () => {
   test("supports output schemas on tools without an input schema", async () => {
     app.tool("ping", {
       output: z.object({ status: z.literal("ok") }),
-      handler: (_input, { signal }) => {
+      handler: (input, { signal }) => {
+        expect(input).toEqual({});
         expect(signal).toBeInstanceOf(AbortSignal);
         return { status: "ok" as const };
       },
@@ -145,6 +146,74 @@ describe("McpApp tool outputs", () => {
       content: [{ type: "text", text: '{"count":4}' }],
       structuredContent: { count: 4 },
     });
+  });
+
+  test("uncompilable output schemas do not hide other tools", async () => {
+    app.tool("invalid-pattern", {
+      output: z.object({ value: z.string().regex(/a\-/) }),
+      handler: () => ({ value: "a-" }),
+    });
+    app.tool("healthy", {
+      output: z.object({ ok: z.boolean() }),
+      handler: () => ({ ok: true }),
+    });
+    await connect();
+    const { tools } = await client.listTools();
+    expect(tools.map(tool => tool.name)).toEqual(["invalid-pattern", "healthy"]);
+    expect(tools[0]?.outputSchema).toBeUndefined();
+    expect(tools[1]?.outputSchema?.type).toBe("object");
+    expect(await client.callTool({ name: "invalid-pattern" })).toEqual({
+      content: [{ type: "text", text: '{"value":"a-"}' }],
+    });
+    expect((await client.callTool({ name: "healthy" })).structuredContent).toEqual({ ok: true });
+  });
+
+  test("JSON Schema mismatches return tool errors instead of failing client validation", async () => {
+    app.tool("case-insensitive", {
+      input: z.object({ value: z.string() }),
+      output: z.object({ value: z.string().regex(/^abc$/i) }),
+      handler: ({ value }) => ({ value }),
+    });
+    await connect();
+    await client.listTools();
+    const result = await client.callTool({ name: "case-insensitive", arguments: { value: "ABC" } });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(result.content).toEqual([{
+      type: "text", text: expect.stringContaining("Output validation error"),
+    }]);
+    expect(await client.callTool({ name: "case-insensitive", arguments: { value: "abc" } })).toEqual({
+      content: [{ type: "text", text: '{"value":"abc"}' }],
+      structuredContent: { value: "abc" },
+    });
+  });
+
+  test("local datetimes accepted by both validators retain structured output", async () => {
+    app.tool("local-time", {
+      output: z.object({ at: z.iso.datetime({ local: true }) }),
+      handler: () => ({ at: "2026-01-01T12:00:00" }),
+    });
+    await connect();
+    expect((await client.listTools()).tools[0]?.outputSchema?.type).toBe("object");
+    expect(await client.callTool({ name: "local-time" })).toEqual({
+      content: [{ type: "text", text: '{"at":"2026-01-01T12:00:00"}' }],
+      structuredContent: { at: "2026-01-01T12:00:00" },
+    });
+  });
+
+  test.each([false, true])("overwrite schemas remain text-only without applying rewrites (root: %s)", async (root) => {
+    let rewrites = 0;
+    const rewrite = (n: number) => { rewrites++; return n + 1; };
+    const output = root
+      ? z.object({ n: z.number().max(2) }).overwrite(({ n }) => ({ n: rewrite(n) }))
+      : z.object({ n: z.number().overwrite(rewrite).max(2) });
+    app.tool("overwrite", { output, handler: () => ({ n: 1 }) });
+    await connect();
+    expect((await client.listTools()).tools[0]?.outputSchema).toBeUndefined();
+    expect(await client.callTool({ name: "overwrite" })).toEqual({
+      content: [{ type: "text", text: '{"n":1}' }],
+    });
+    expect(rewrites).toBe(0);
   });
 
   test("handler errors remain tool errors without structured content", async () => {
