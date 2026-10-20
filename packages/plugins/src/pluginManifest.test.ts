@@ -9,7 +9,7 @@ import {
 } from "./pluginManifest";
 
 const validManifest = {
-	specVersion: 3,
+	specVersion: 4,
 	pluginId: "monday",
 	name: "monday.com MCP Server",
 	version: "1.0.0",
@@ -64,29 +64,18 @@ const governance = {
 	},
 } satisfies Governance;
 
-describe("PluginManifestSchema v3", () => {
-	test("accepts a v3 manifest", () => {
+describe("PluginManifestSchema v4", () => {
+	test("accepts a v4 manifest", () => {
 		const result = PluginManifestSchema.parse(validManifest);
-		expect(result.specVersion).toBe(3);
+		expect(result.specVersion).toBe(4);
 		expect(result.pluginId).toBe("monday");
 		expect(result.auth).toEqual({ ...validManifest.auth, grantType: "authorization_code" });
 		expect(result.governance).toBeUndefined();
 		expect(result.icon).toBeUndefined();
 	});
 
-	test("preserves complete chained auth config", () => {
-		const result = PluginManifestSchema.parse({ ...validManifest, auth: chainedAuth });
-		expect(result.auth).toEqual(chainedAuth);
-	});
-
-	test("applies defaults to minimal chained auth", () => {
-		const auth = {
-			type: "chained" as const,
-			authorizationEndpoint: chainedAuth.authorizationEndpoint,
-			callbackEndpoint: chainedAuth.callbackEndpoint,
-		};
-		const result = PluginManifestSchema.parse({ ...validManifest, auth });
-		expect(result.auth).toEqual({ ...auth, requiredUserContext: ["user_id"] });
+	test("rejects chained auth for custom registration", () => {
+		expect(PluginManifestSchema.safeParse({ ...validManifest, auth: chainedAuth }).success).toBe(false);
 	});
 
 	test.each([undefined, "header", "query"])("accepts no auth with deliveryMethod %s", (deliveryMethod) => {
@@ -95,7 +84,7 @@ describe("PluginManifestSchema v3", () => {
 		expect(result.auth).toEqual(auth);
 	});
 
-	test.each([0, 1, 2, 4, "3", undefined])("rejects specVersion %s", (specVersion) => {
+	test.each([0, 1, 2, 3, "4", undefined])("rejects specVersion %s", (specVersion) => {
 		expect(PluginManifestSchema.safeParse({ ...validManifest, specVersion }).success).toBe(false);
 	});
 
@@ -126,9 +115,9 @@ describe("PluginManifestSchema v3", () => {
 	});
 
 	test("preserves governance and an optional icon string", () => {
-		const result = PluginManifestSchema.parse({ ...validManifest, governance, icon: "📋" });
+		const result = PluginManifestSchema.parse({ ...validManifest, governance, icon: "https://example.com/icon.png" });
 		expect(result.governance).toEqual(governance);
-		expect(result.icon).toBe("📋");
+		expect(result.icon).toBe("https://example.com/icon.png");
 	});
 
 	test.each(["client_credentials", "urn:ietf:params:oauth:grant-type:saml2-bearer"])("accepts admin grant %s without redirect", (grantType) => {

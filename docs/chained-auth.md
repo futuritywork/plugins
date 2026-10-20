@@ -1,6 +1,6 @@
 # Chained OAuth Authentication
 
-Chained OAuth is a v2 auth option where the plugin manages its own sessions and stores third-party tokens. Unlike auth forwarding (v1), the plugin has full control over the OAuth flow and token storage.
+Chained OAuth is a standalone runtime option where the plugin manages its own sessions and stores third-party tokens. Unlike auth forwarding (v1), the plugin has full control over the OAuth flow and token storage.
 
 ## Overview
 
@@ -32,40 +32,16 @@ Chained OAuth is a v2 auth option where the plugin manages its own sessions and 
      │                 │                 │                 │
 ```
 
-## Plugin Manifest (v3)
+## Support boundary
 
-```typescript
-const app = mcp({
-  name: "my-plugin",
-  version: "1.0.0",
-  pluginManifest: {
-    specVersion: 3,
-    pluginId: "my-plugin",
-    name: "My Plugin",
-    version: "1.0.0",
-    signingKey: process.env.PLUGIN_SIGNING_KEY!,
-    auth: {
-      type: "chained",
-      authorizationEndpoint: "https://plugin.example.com/auth/authorize",
-      callbackEndpoint: "https://plugin.example.com/auth/callback",
-      tokenEndpoint: "https://plugin.example.com/auth/token", // optional
-      requiredUserContext: ["user_id", "email", "organization_id"],
-      externalServices: [
-        {
-          name: "Monday.com",
-          authorizationEndpoint: "https://auth.monday.com/oauth2/authorize",
-          requiredScopes: ["me:read", "boards:read"],
-        },
-      ],
-      sessionConfig: {
-        maxSessionDuration: 86400000, // 24 hours
-        supportsRefresh: true,
-      },
-    },
-    mcpUrl: "https://plugin.example.com/mcp",
-  },
-});
-```
+Futurity custom registration requires [Manifest v4](manifest-v4.md) and rejects
+chained authentication. `PluginManifestSchema` accepts only `forwarding` and
+`none`; do not pass a chained manifest to `mcp({ pluginManifest: ... })` or use
+`none` to bypass this restriction.
+
+`ChainedAuthSchema`, its type, session/token helpers, and the `chainedAuth` runtime
+router remain exported for separately integrated hosts. The protocol below requires
+host implementation and is not a supported custom-registration flow.
 
 ## Implementation
 
@@ -349,11 +325,11 @@ interface Session {
 Platforms discover plugin auth configuration from:
 
 ```
-GET /.well-known/futurity/plugin
+GET <host-defined discovery endpoint>
 ```
 
 Response includes:
-- `auth.type: "chained"` - indicates chained auth
+- A host-defined chained auth configuration (the SDK v4 manifest endpoint cannot serve it)
 - `auth.authorizationEndpoint` - where to redirect users
 - `auth.requiredUserContext` - what user info to include in JWT
 
@@ -434,10 +410,6 @@ GET /.well-known/jwks.json
 
 ## Manifest version migration
 
-Both forwarding and chained authentication use `specVersion: 3`.
-Legacy v1/v2 manifests and the `authForwarding` field are no longer accepted.
-Replace `authForwarding` with `auth: { type: "forwarding", ... }` and set
-`specVersion: 3`. Use `PluginManifestSchema` instead of the removed
-`PluginManifestSchemaV1` and `PluginManifestSchemaCompat` exports.
-
-See [Manifest v3](manifest-v3.md) for governance and public-plugin declarations.
+See [Manifest v4](manifest-v4.md) for supported custom-plugin declarations.
+There is no chained manifest migration into v4 custom registration; use these
+runtime utilities only with a separately integrated host.

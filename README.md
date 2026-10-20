@@ -192,15 +192,12 @@ const app = mcp({
 
 ## Authentication
 
-All signed plugin manifests use `specVersion: 3`. See [Manifest v3](docs/manifest-v3.md)
-for migration, public (`none`) auth, and governance metadata.
+Custom-plugin manifests use `specVersion: 4` only. See [Manifest v4](docs/manifest-v4.md)
+for migration, signed metadata, organization credentials, and governance.
 
-There are two authenticated modes for Futurity plugins:
-
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| **Auth Forwarding** (v1) | Platform manages OAuth tokens | Simple integrations |
-| **Chained Auth** (v2) | Plugin manages sessions & tokens | Complex integrations, multi-service |
+Custom registration supports `forwarding` (platform-managed OAuth) and `none`
+(no OAuth exchange, optionally with explicit organization credentials).
+Chained authentication is not supported by custom registration.
 
 ### Auth Forwarding (v1)
 
@@ -221,7 +218,7 @@ const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
   pluginManifest: {
-    specVersion: 3,
+    specVersion: 4,
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",
@@ -249,47 +246,15 @@ GET /.well-known/futurity/plugin
 
 The response includes an `X-Futurity-Signature` header with an Ed25519 JWS signature.
 
-### Chained Auth (v2)
+### Standalone chained-auth runtime
 
-For plugins that need to manage their own sessions and store third-party tokens, use chained auth. The plugin controls the OAuth flow and issues its own tokens.
+The session, token, and `chainedAuth` routing utilities remain available for
+separately integrated hosts. They are not a v4 manifest authentication option;
+`PluginManifestSchema` rejects `auth.type: "chained"`. Do not declare `none` as a
+workaround for a chained plugin.
 
-```typescript
-const app = mcp({
-  name: "my-plugin",
-  version: "1.0.0",
-  pluginManifest: {
-    specVersion: 3,
-    pluginId: "my-plugin",
-    name: "My Plugin",
-    version: "1.0.0",
-    signingKey: process.env.PLUGIN_SIGNING_KEY!,
-    auth: {
-      type: "chained",
-      authorizationEndpoint: "https://plugin.example.com/auth/authorize",
-      callbackEndpoint: "https://plugin.example.com/auth/callback",
-      tokenEndpoint: "https://plugin.example.com/auth/token",
-      requiredUserContext: ["user_id", "email"],
-    },
-    mcpUrl: "https://plugin.example.com/mcp",
-  },
-  chainedAuth: {
-    sessionStore: mySessionStore,
-    platformJwksUrl: "https://platform.example.com/.well-known/jwks.json",
-    pluginSigningKey: process.env.PLUGIN_SIGNING_KEY!,
-    handlers: {
-      onAuthorize: async (userContext, platformState, platformCallback) => { ... },
-      onCallback: async (req) => { ... },
-      onToken: async (req) => { ... },
-    },
-  },
-});
-```
-
-See [docs/chained-auth.md](docs/chained-auth.md) for full documentation including:
-- Complete implementation guide
-- Request binding for anti-replay protection
-- Session management
-- Platform integration guide
+See [docs/chained-auth.md](docs/chained-auth.md) for the runtime protocol and
+host integration requirements.
 
 ### Signing utilities
 
