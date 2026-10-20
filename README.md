@@ -213,7 +213,7 @@ const app = mcp({
 
 ## Authentication
 
-Custom-plugin manifests use `specVersion: 4` only. See [Manifest v4](docs/manifest-v4.md)
+SDK v3 (`@futurity/plugins@^3.0.0`) emits custom-plugin manifests using `specVersion: 4` only. See [Manifest v4](docs/manifest-v4.md)
 for migration, signed metadata, organization credentials, and governance.
 
 Custom registration supports `forwarding` (platform-managed OAuth) and `none`
@@ -388,6 +388,18 @@ Each example requires `FUTURITY_SIGNING_KEY`. The local examples publish
 `http://localhost:3000/mcp` by default; set `PUBLIC_URL` to the public HTTPS base
 URL before registration. They use `auth.type: "none"` because their tools do not
 require OAuth; `oauth.ts` demonstrates discovery metadata only.
+
+### Repository verification
+
+```bash
+bun install --frozen-lockfile
+bun run check
+bun run test
+bun run build
+```
+
+`check` typechecks the SDK, all examples, and the scaffold template's TypeScript
+against the local SDK source, without requiring a prior build.
 
 ## monday.com Integration Example
 

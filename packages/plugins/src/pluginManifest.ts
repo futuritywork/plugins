@@ -195,7 +195,7 @@ const DatasetSchema = z.object({
   description: z.string().optional(),
   group: z.string().optional(),
   paths: z.array(z.string().min(1)).optional(), // upstream paths for audit and conformance
-  fields: z.array(DatasetFieldSchema).optional(),
+  fields: z.array(DatasetFieldSchema).min(1),
   probe: z
     .object({ tool: z.string().min(1), args: z.record(z.string(), z.unknown()) })
     .optional(),
@@ -213,18 +213,11 @@ export const GovernanceSchema = z
     restrictedByDefault: z.array(z.string()).optional(),
   })
   .superRefine((data, ctx) => {
-    for (const [id, set] of Object.entries(data.datasets)) {
+    for (const id of Object.keys(data.datasets)) {
       if (!/^[^.\s]+$/.test(id)) {
         ctx.addIssue({
           code: "custom",
           message: `Data set id "${id}" has a dot or space; a data set id has neither.`,
-          path: ["datasets", id],
-        });
-      }
-      if (!set.fields?.length) {
-        ctx.addIssue({
-          code: "custom",
-          message: `Data set "${id}" declares no fields; list at least one.`,
           path: ["datasets", id],
         });
       }
@@ -254,6 +247,19 @@ export const GovernanceSchema = z
       path: ["datasets"],
     },
   );
+
+/** Keys collected by explicit credential forms; other grants have no required keys. */
+const requiredCredentialKeys: Partial<Record<NonNullable<z.infer<typeof AuthSchema>["grantType"]>, readonly string[]>> = {
+  api_key: ["api_key"],
+  client_credentials: ["api_base_url", "client_id", "client_secret"],
+  "urn:ietf:params:oauth:grant-type:saml2-bearer": [
+    "api_base_url",
+    "client_id",
+    "saml_subject_name_id",
+    "private_key_pem",
+    "public_cert_pem",
+  ],
+};
 
 /** A v4 custom-plugin producer manifest with validated auth and optional data governance. */
 export const PluginManifestSchema = z
@@ -287,20 +293,7 @@ export const PluginManifestSchema = z
       issue("A credentials grant requires fields");
     // Null/omitted fields use platform defaults; explicit arrays must collect each grant key.
     if (fields != null) {
-      const required =
-        grant === "api_key"
-          ? ["api_key"]
-          : grant === "client_credentials"
-            ? ["api_base_url", "client_id", "client_secret"]
-            : grant === "urn:ietf:params:oauth:grant-type:saml2-bearer"
-              ? [
-                  "api_base_url",
-                  "client_id",
-                  "saml_subject_name_id",
-                  "private_key_pem",
-                  "public_cert_pem",
-                ]
-              : [];
+      const required = requiredCredentialKeys[grant] ?? [];
       const keys = new Set(
         fields.flatMap((field) => [
           field.key,
@@ -334,7 +327,7 @@ export type AuthForwarding = z.infer<typeof AuthForwardingSchema>;
 export type ChainedAuth = z.infer<typeof ChainedAuthSchema>;
 export type Governance = z.infer<typeof GovernanceSchema>;
 
-/** Author-supplied manifest fields; the SDK adds specVersion before signing. */
-export interface PluginManifestOptions extends Omit<PluginManifest, "specVersion"> {
+/** Author-supplied manifest fields; the SDK applies schema defaults and adds specVersion before signing. */
+export interface PluginManifestOptions extends Omit<z.input<typeof PluginManifestSchema>, "specVersion"> {
   signingKey: string;
 }

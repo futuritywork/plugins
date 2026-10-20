@@ -1,6 +1,6 @@
 {
   "name": "@futurity/plugins",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "type": "module",
   "description": "A minimal MCP (Model Context Protocol) server library for Bun with auth forwarding support",
   "author": "Futurity",
@@ -41,16 +41,16 @@
     "prepublishOnly": "bun run build"
   },
   "peerDependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.3",
-    "zod": "^4.1.13"
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
   },
   "dependencies": {
     "jose": "^6.0.11"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.3",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@types/bun": "latest",
-    "typescript": "^5.9.3",
-    "zod": "^4.1.13"
+    "typescript": "^7.0.2",
+    "zod": "^4.6.7"
   }
 }

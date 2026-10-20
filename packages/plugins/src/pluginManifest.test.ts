@@ -6,6 +6,7 @@ import {
 	GovernanceSchema,
 	type ChainedAuth,
 	type Governance,
+	type PluginManifest,
 } from "./pluginManifest";
 
 const validManifest = {
@@ -179,9 +180,16 @@ describe("GovernanceSchema", () => {
 	});
 
 	test.each([{ fields: undefined }, { fields: [] }])("rejects fieldless datasets (%j)", ({ fields }) => {
-		expect(() => GovernanceSchema.parse({
+		const result = GovernanceSchema.safeParse({
 			credential: "user", datasets: { people: { title: "People", fields } },
-		})).toThrow("declares no fields");
+		});
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues).toContainEqual(expect.objectContaining({
+				path: ["datasets", "people", "fields"],
+				code: fields === undefined ? "invalid_type" : "too_small",
+			}));
+		}
 	});
 
 	test.each([
@@ -298,5 +306,138 @@ describe("ChainedAuthSchema", () => {
 		expect(result.requiredUserContext).toEqual(["user_id"]);
 		expect(result.sessionConfig).toBeUndefined();
 		expect(result.externalServices).toBeUndefined();
+	});
+});
+
+const credential = { key: "secret", label: "Secret", type: "password" as const };
+const keypair = { key: "private_key_pem", label: "Certificate", type: "x509-keypair" as const, secondaryKey: "public_cert_pem" };
+
+/** Exercises credential rules at the complete manifest boundary. */
+function parseCredentials(credentials_schema: unknown, grantType = "credentials") {
+	const auth = ["none", "credentials", "api_key"].includes(grantType)
+		? { type: "none", grantType, credentials_schema }
+		: { ...validManifest.auth, grantType, credentials_schema };
+	return PluginManifestSchema.safeParse({ ...validManifest, auth });
+}
+
+describe("manifest credentials", () => {
+	test("preserves credential display options and keypair keys", () => {
+		const fields = [{ ...credential, required: true, placeholder: "Enter secret", help: "From your console" }, keypair];
+		const result = parseCredentials(fields);
+		expect(result.success).toBe(true);
+		if (result.success) expect(result.data.auth.credentials_schema).toEqual(fields);
+	});
+
+	test.each([
+		{ ...keypair, secondaryKey: undefined }, { ...keypair, secondaryKey: "" },
+		{ ...credential, secondaryKey: "other" }, { ...credential, secondaryKey: "" },
+	])("rejects invalid secondaryKey %j", (field) => {
+		const result = parseCredentials([field]);
+		expect(result.success).toBe(false);
+		if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({
+			path: ["auth", "credentials_schema", 0, "secondaryKey"],
+			message: "secondaryKey is required only for x509-keypair fields",
+		}));
+	});
+
+	test.each([
+		[credential, credential],
+		[keypair, { ...credential, key: keypair.secondaryKey }],
+		[{ ...credential, key: keypair.secondaryKey }, keypair],
+		[keypair, { ...keypair, key: "other" }],
+		[{ ...keypair, secondaryKey: keypair.key }],
+	].map((fields) => ({ fields })))("rejects duplicate primary/secondary keys %j", ({ fields }) => {
+		const result = parseCredentials(fields);
+		expect(result.success).toBe(false);
+		if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({ message: "Credential keys must be unique" }));
+	});
+
+	test.each([".*", "", null, 42])("rejects unsupported pattern %j", (pattern) => {
+		expect(parseCredentials([{ ...credential, pattern }]).success).toBe(false);
+	});
+
+	test.each([undefined, null, []].map((fields) => ({ fields })))("none accepts no fields, credentials requires fields: %j", ({ fields }) => {
+		expect(parseCredentials(fields, "none").success).toBe(true);
+		expect(parseCredentials(fields, "credentials").success).toBe(false);
+	});
+
+	test("none (including omitted grant) cannot collect fields", () => {
+		expect(parseCredentials([credential], "none").success).toBe(false);
+		expect(PluginManifestSchema.safeParse({ ...validManifest, auth: { type: "none", credentials_schema: [credential] } }).success).toBe(false);
+	});
+
+	const grants = [
+		{ grant: "api_key", keys: ["api_key"] },
+		{ grant: "client_credentials", keys: ["api_base_url", "client_id", "client_secret"] },
+		{ grant: "urn:ietf:params:oauth:grant-type:saml2-bearer", keys: ["api_base_url", "client_id", "saml_subject_name_id", "private_key_pem", "public_cert_pem"] },
+	];
+	for (const { grant, keys } of grants) {
+		test(`${grant} requires every key in explicit arrays`, () => {
+			const fields = keys.map((key) => ({ ...credential, key }));
+			expect(parseCredentials(fields, grant).success).toBe(true);
+			expect(parseCredentials([], grant).success).toBe(false);
+			for (const key of keys) {
+				const result = parseCredentials(fields.filter((field) => field.key !== key), grant);
+				expect(result.success).toBe(false);
+				if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({
+					path: ["auth", "credentials_schema"], message: `auth.credentials_schema must collect ${key} for ${grant}`,
+				}));
+			}
+		});
+		test.each([undefined, null])(`${grant} preserves platform-default fields %j`, (fields) => {
+			const result = parseCredentials(fields, grant);
+			expect(result.success).toBe(true);
+			if (result.success) expect(result.data.auth.credentials_schema).toBe(fields);
+		});
+	}
+
+	test("SAML counts the secondary certificate key", () => {
+		expect(parseCredentials([
+			...['api_base_url', 'client_id', 'saml_subject_name_id'].map((key) => ({ ...credential, key })), keypair,
+		], "urn:ietf:params:oauth:grant-type:saml2-bearer").success).toBe(true);
+	});
+
+	test("authorization_code has no required credential keys", () => {
+		expect(parseCredentials([], "authorization_code").success).toBe(true);
+		expect(parseCredentials([credential], "authorization_code").success).toBe(true);
+	});
+});
+
+describe("manifest URLs and metadata", () => {
+	test.each(["/", "/oauth/token", "/oauth/token?tenant=demo"])("relative token endpoint %s requires an admin grant", (tokenEndpoint) => {
+		for (const grantType of ["client_credentials", "urn:ietf:params:oauth:grant-type:saml2-bearer"]) {
+			expect(PluginManifestSchema.safeParse({ ...validManifest, auth: { type: "forwarding", grantType, tokenEndpoint } }).success).toBe(true);
+		}
+		expect(PluginManifestSchema.safeParse({ ...validManifest, auth: { ...validManifest.auth, tokenEndpoint } }).success).toBe(false);
+	});
+
+	test.each(["//evil.example/token", "/\\evil.example", "/token#fragment", "/has space", "token", "ftp://example.com/token", "javascript:alert(1)", "file:///token"])("rejects token endpoint %j", (tokenEndpoint) => {
+		expect(PluginManifestSchema.safeParse({ ...validManifest, auth: { type: "forwarding", grantType: "client_credentials", tokenEndpoint } }).success).toBe(false);
+	});
+
+	const metadata = {
+		tagline: "Connect work", overview: "Manage projects", setupType: "admin",
+		oauth: { token_body: "json", setup_steps: ["Create credentials"], console_url: "https://example.com/console" },
+		features: [{ title: "Read", description: "Read projects", category: "read_write", icon: "folder" }],
+		permissions: ["read", { scope: "write", label: "Write", description: "Change projects", access: "admin", docsUrl: null }],
+		links: { docs: "https://example.com/docs", privacy: "http://example.com/privacy" },
+	} satisfies NonNullable<PluginManifest["metadata"]>;
+	test.each([undefined, null, metadata])("preserves supported metadata %j", (metadata) => {
+		expect(PluginManifestSchema.parse({ ...validManifest, metadata }).metadata).toEqual(metadata);
+	});
+	test.each([
+		{ setupType: "owner" }, { oauth: { token_body: "xml" } }, { oauth: { setup_steps: [42] } },
+		{ oauth: { console_url: "ftp://example.com" } }, { links: { docs: "/docs" } },
+		{ links: { privacy: "javascript:alert(1)" } },
+		{ features: [{ ...metadata.features[0], category: "admin" }] },
+		{ permissions: [{ scope: "read", label: "Read", description: "Read", access: "owner", docsUrl: null }] },
+		{ permissions: [{ scope: "read", label: "Read", description: "Read", access: "read", docsUrl: "file:///docs" }] },
+	])("rejects invalid metadata %j", (invalid) => {
+		expect(PluginManifestSchema.safeParse({ ...validManifest, metadata: { ...metadata, ...invalid } }).success).toBe(false);
+	});
+	test.each(["ftp://example.com", "javascript:alert(1)"])("rejects non-HTTP display and authorization URLs %s", (url) => {
+		for (const overrides of [{ mcpUrl: url }, { icon: url }, { auth: { ...validManifest.auth, authorizationEndpoint: url } }]) {
+			expect(PluginManifestSchema.safeParse({ ...validManifest, ...overrides }).success).toBe(false);
+		}
 	});
 });
