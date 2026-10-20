@@ -73,6 +73,7 @@ const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
 
 const pluginManifest: PluginManifestOptions = {
 	pluginId: "monday",
+	developerEmail: "developer@example.com",
 	name: "monday.com MCP Server",
 	version: "1.0.0",
 	signingKey,

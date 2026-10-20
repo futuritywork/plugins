@@ -22,6 +22,7 @@ const app = mcp({
 	version: "1.0.0",
 	pluginManifest: {
 		pluginId: "stateful-server",
+		developerEmail: "developer@example.com",
 		name: "stateful-server",
 		version: "1.0.0",
 		mcpUrl,

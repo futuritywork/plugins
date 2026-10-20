@@ -35,6 +35,7 @@ import type {
 // Synthetic discovery data for transport tests, not a chained registration declaration.
 const pluginManifest: PluginManifestOptions = {
 	pluginId: "test",
+	developerEmail: "developer@example.com",
 	name: "Test",
 	version: "1.0.0",
 	mcpUrl: "http://localhost/mcp",

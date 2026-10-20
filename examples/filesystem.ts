@@ -90,6 +90,7 @@ const app = mcp({
 	version: "1.0.0",
 	pluginManifest: {
 		pluginId: "virtual-filesystem",
+		developerEmail: "developer@example.com",
 		name: "virtual-filesystem",
 		version: "1.0.0",
 		mcpUrl,

@@ -1,15 +1,17 @@
 import { test, expect, describe, afterEach } from "bun:test";
 import { mcp } from "./app";
-import { generateKeyPair } from "./signing";
+import { generateKeyPair, verifyPayload } from "./signing";
 import type { PluginManifestOptions } from "./pluginManifest";
 
+const signingKeys = generateKeyPair();
 const pluginManifest: PluginManifestOptions = {
   pluginId: "test",
+  developerEmail: "developer@example.com",
   name: "Test",
   version: "1.0.0",
   mcpUrl: "http://localhost/mcp",
   auth: { type: "none" },
-  signingKey: generateKeyPair().privateKey,
+  signingKey: signingKeys.privateKey,
 };
 
 describe("McpApp.fetch", () => {
@@ -32,6 +34,15 @@ describe("McpApp.fetch", () => {
 
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("OK 200");
+  });
+
+  test("discovery includes developerEmail in the signed manifest", async () => {
+    app = mcp({ name: "test", version: "1.0.0", pluginManifest });
+    const res = await app.fetch(new Request("http://localhost/.well-known/futurity/plugin"));
+    expect(res.status).toBe(200);
+    const payload = await res.text();
+    expect(JSON.parse(payload).developerEmail).toBe("developer@example.com");
+    expect(verifyPayload(payload, res.headers.get("X-Futurity-Signature")!, signingKeys.publicKey)).toBe(true);
   });
 
   test("fetch handles MCP initialization", async () => {

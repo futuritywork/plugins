@@ -30,6 +30,7 @@ if (!signingKey) throw new Error("Set FUTURITY_SIGNING_KEY to your Ed25519 priva
 
 const pluginManifest = {
   pluginId: "my-plugin",
+  developerEmail: "developer@example.com",
   name: "My Plugin",
   version: "1.0.0",
   mcpUrl: `${process.env.PUBLIC_URL ?? "http://localhost:3000"}/mcp`,
@@ -240,6 +241,7 @@ const app = mcp({
   version: "1.0.0",
   pluginManifest: {
     pluginId: "my-plugin",
+    developerEmail: "developer@example.com",
     name: "My Plugin",
     version: "1.0.0",
     signingKey, // required key loaded above

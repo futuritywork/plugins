@@ -9,6 +9,8 @@ sets its supported version before validation and signing.
 ## Migration
 
 - Remove `specVersion` from your `pluginManifest` options; the SDK supplies it.
+- Set `developerEmail` to a valid developer or support email address. This required
+  top-level field is included in the signed manifest.
 - Replace legacy `authForwarding: { ... }` with `auth: { type: "forwarding", ... }`.
 - Use `PluginManifestSchema` instead of the removed `PluginManifestSchemaV1` or
   `PluginManifestSchemaCompat` exports.
@@ -30,6 +32,7 @@ import type { PluginManifestOptions } from "@futurity/plugins";
 
 const manifest: PluginManifestOptions = {
   pluginId: "public-catalog",
+  developerEmail: "developer@example.com",
   name: "Public Catalog",
   version: "1.0.0",
   mcpUrl: "https://catalog.example.com/mcp",

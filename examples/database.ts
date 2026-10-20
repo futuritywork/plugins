@@ -42,6 +42,7 @@ const app = mcp({
 	version: "1.0.0",
 	pluginManifest: {
 		pluginId: "memory-database",
+		developerEmail: "developer@example.com",
 		name: "memory-database",
 		version: "1.0.0",
 		mcpUrl,

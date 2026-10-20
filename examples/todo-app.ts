@@ -38,6 +38,7 @@ const app = mcp({
 	version: "1.0.0",
 	pluginManifest: {
 		pluginId: "todo-app",
+		developerEmail: "developer@example.com",
 		name: "todo-app",
 		version: "1.0.0",
 		mcpUrl,

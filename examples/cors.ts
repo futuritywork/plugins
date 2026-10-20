@@ -8,6 +8,7 @@ const app = mcp({
 	version: "1.0.0",
 	pluginManifest: {
 		pluginId: "my-cors-server",
+		developerEmail: "developer@example.com",
 		name: "my-cors-server",
 		version: "1.0.0",
 		mcpUrl,

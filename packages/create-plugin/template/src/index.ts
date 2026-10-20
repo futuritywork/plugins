@@ -19,6 +19,7 @@ if (!signingKey) {
 
 const manifest: PluginManifestOptions = {
   pluginId: "{{slug}}",
+  developerEmail: "developer@example.com", // Replace with your developer or support email.
   name: "{{name}}",
   version: "0.1.0",
   mcpUrl: `${PUBLIC_URL}/mcp`,

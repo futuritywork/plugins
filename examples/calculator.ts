@@ -17,6 +17,7 @@ const app = mcp({
 	version: "1.0.0",
 	pluginManifest: {
 		pluginId: "calculator",
+		developerEmail: "developer@example.com",
 		name: "calculator",
 		version: "1.0.0",
 		mcpUrl,

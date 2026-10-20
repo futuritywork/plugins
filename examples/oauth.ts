@@ -7,6 +7,7 @@ const app = mcp({
 	version: "1.0.0",
 	pluginManifest: {
 		pluginId: "my-oauth-server",
+		developerEmail: "developer@example.com",
 		name: "my-oauth-server",
 		version: "1.0.0",
 		mcpUrl,

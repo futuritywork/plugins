@@ -74,6 +74,7 @@ const app = mcp({
 	version: "1.0.0",
 	pluginManifest: {
 		pluginId: "weather-api",
+		developerEmail: "developer@example.com",
 		name: "weather-api",
 		version: "1.0.0",
 		mcpUrl,

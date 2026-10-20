@@ -11,6 +11,7 @@ import {
 const validManifest = {
 	specVersion: 4,
 	pluginId: "monday",
+	developerEmail: "developer@example.com",
 	name: "monday.com MCP Server",
 	version: "1.0.0",
 	auth: {
@@ -69,9 +70,18 @@ describe("PluginManifestSchema v4", () => {
 		const result = PluginManifestSchema.parse(validManifest);
 		expect(result.specVersion).toBe(4);
 		expect(result.pluginId).toBe("monday");
+		expect(result.developerEmail).toBe("developer@example.com");
 		expect(result.auth).toEqual({ ...validManifest.auth, grantType: "authorization_code" });
 		expect(result.governance).toBeUndefined();
 		expect(result.icon).toBeUndefined();
+	});
+
+	test.each([undefined, null, "", "not-an-email", "https://example.com", 42])("rejects invalid developerEmail %j", (developerEmail) => {
+		const result = PluginManifestSchema.safeParse({ ...validManifest, developerEmail });
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues).toContainEqual(expect.objectContaining({ path: ["developerEmail"] }));
+		}
 	});
 
 	test("rejects chained auth for custom registration", () => {
@@ -193,7 +203,7 @@ describe("GovernanceSchema", () => {
 	});
 
 	test.each(["constructor", "toString"])("accepts restrictions on explicitly declared dataset %s", (id) => {
-		const input = {
+		const input: Governance = {
 			credential: "user",
 			datasets: { [id]: governance.datasets.people },
 			restrictedByDefault: [id],

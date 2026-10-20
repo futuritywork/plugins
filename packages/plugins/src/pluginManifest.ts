@@ -260,6 +260,8 @@ export const PluginManifestSchema = z
   .object({
     specVersion: z.literal(PLUGIN_MANIFEST_SPEC_VERSION),
     pluginId: z.string().min(1),
+    /** Developer or support contact included in the signed manifest. */
+    developerEmail: z.email(),
     name: z.string().min(1),
     version: z.string().regex(/^\d+\.\d+\.\d+$/, "Must be semver (e.g. 1.0.0)"),
     icon: HttpUrlSchema.optional(),
