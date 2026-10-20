@@ -1,6 +1,6 @@
 # Chained OAuth Authentication
 
-Chained OAuth is a v2 auth option where the plugin manages its own sessions and stores third-party tokens. Unlike auth forwarding (v1), the plugin has full control over the OAuth flow and token storage.
+Chained OAuth is a standalone runtime option where the plugin manages its own sessions and stores third-party tokens. Unlike auth forwarding (v1), the plugin has full control over the OAuth flow and token storage.
 
 ## Overview
 
@@ -32,40 +32,16 @@ Chained OAuth is a v2 auth option where the plugin manages its own sessions and 
      │                 │                 │                 │
 ```
 
-## Plugin Manifest (v2)
+## Support boundary
 
-```typescript
-const app = mcp({
-  name: "my-plugin",
-  version: "1.0.0",
-  pluginManifest: {
-    specVersion: 2,
-    pluginId: "my-plugin",
-    name: "My Plugin",
-    version: "1.0.0",
-    signingKey: process.env.PLUGIN_SIGNING_KEY!,
-    auth: {
-      type: "chained",
-      authorizationEndpoint: "https://plugin.example.com/auth/authorize",
-      callbackEndpoint: "https://plugin.example.com/auth/callback",
-      tokenEndpoint: "https://plugin.example.com/auth/token", // optional
-      requiredUserContext: ["user_id", "email", "organization_id"],
-      externalServices: [
-        {
-          name: "Monday.com",
-          authorizationEndpoint: "https://auth.monday.com/oauth2/authorize",
-          requiredScopes: ["me:read", "boards:read"],
-        },
-      ],
-      sessionConfig: {
-        maxSessionDuration: 86400000, // 24 hours
-        supportsRefresh: true,
-      },
-    },
-    mcpUrl: "https://plugin.example.com/mcp",
-  },
-});
-```
+Futurity custom registration requires [Manifest v4](manifest-v4.md) and rejects
+chained authentication. `PluginManifestSchema` accepts only `forwarding` and
+`none`; do not pass a chained manifest to `mcp({ pluginManifest: ... })` or use
+`none` to bypass this restriction.
+
+`ChainedAuthSchema`, its type, session/token helpers, and the `chainedAuth` runtime
+router remain exported for separately integrated hosts. The protocol below requires
+host implementation and is not a supported custom-registration flow.
 
 ## Implementation
 
@@ -73,32 +49,42 @@ const app = mcp({
 
 ```typescript
 import {
-  mcp,
+  createChainedAuthRouter,
   createPendingSession,
   activateSession,
   generatePluginToken,
   generateChainedState,
   parseChainedState,
   InMemorySessionStore, // Use a real store in production
-} from "@futuritywork/plugins";
+} from "@futurity/plugins";
 
 const sessionStore = new InMemorySessionStore();
 
-const app = mcp({
-  name: "my-plugin",
-  version: "1.0.0",
-  chainedAuth: {
-    sessionStore,
-    platformJwksUrl: "https://platform.example.com/.well-known/jwks.json",
-    pluginSigningKey: process.env.PLUGIN_SIGNING_KEY!,
-    handlers: {
-      onAuthorize,
-      onCallback,
-      onToken, // optional
-    },
+const authRouter = createChainedAuthRouter({
+  sessionStore,
+  platformJwksUrl: "https://platform.example.com/.well-known/jwks.json",
+  pluginSigningKey: process.env.PLUGIN_SIGNING_KEY!,
+  handlers: {
+    onAuthorize,
+    onCallback,
+    onToken, // optional
   },
 });
+
+// Mount these handlers in your separately integrated host.
+async function handleAuth(req: Request): Promise<Response> {
+  switch (new URL(req.url).pathname) {
+    case "/auth/authorize": return authRouter.handleAuthorize(req);
+    case "/auth/callback": return authRouter.handleCallback(req);
+    case "/auth/token": return authRouter.handleToken(req);
+    default: return new Response("Not Found", { status: 404 });
+  }
+}
 ```
+
+`McpApp` / `mcp()` require a signed v4 manifest. For this standalone flow,
+mount `handleAuth` in your own HTTP host and route MCP requests separately;
+the router does not start a server or provide MCP request authentication.
 
 ### 2. Handle Authorization
 
@@ -264,9 +250,13 @@ SHA-256(METHOD + "\n" + PATH + "\n" + BODY)
 ### Plugin Validation
 
 ```typescript
-import { validateAuthenticatedRequest } from "@futuritywork/plugins";
+import { validateAuthenticatedRequest } from "@futurity/plugins";
 
-app.middleware(async (req, next) => {
+// Call this from your host's MCP route with its MCP request handler.
+async function authenticatedMcp(
+  req: Request,
+  next: (req: Request) => Promise<Response>
+): Promise<Response> {
   try {
     const { session, platformId } = await validateAuthenticatedRequest(
       req,
@@ -281,11 +271,11 @@ app.middleware(async (req, next) => {
     return next(req);
   } catch (error) {
     return Response.json(
-      { error: "unauthorized", message: error.message },
+      { error: "unauthorized", message: error instanceof Error ? error.message : "Invalid request" },
       { status: 401 }
     );
   }
-});
+}
 ```
 
 ## Security Model
@@ -349,11 +339,11 @@ interface Session {
 Platforms discover plugin auth configuration from:
 
 ```
-GET /.well-known/futurity/plugin
+GET <host-defined discovery endpoint>
 ```
 
 Response includes:
-- `auth.type: "chained"` - indicates chained auth
+- A host-defined chained auth configuration (the SDK v4 manifest endpoint cannot serve it)
 - `auth.authorizationEndpoint` - where to redirect users
 - `auth.requiredUserContext` - what user info to include in JWT
 
@@ -432,29 +422,8 @@ GET /.well-known/jwks.json
 }
 ```
 
-## Migration from Auth Forwarding (v1)
+## Manifest version migration
 
-The v1 `authForwarding` format is still supported for backward compatibility:
-
-```typescript
-// v1 format (still works)
-{
-  specVersion: 1,
-  authForwarding: {
-    tokenEndpoint: "...",
-    authorizationEndpoint: "...",
-  }
-}
-
-// v2 format (recommended)
-{
-  specVersion: 2,
-  auth: {
-    type: "forwarding",  // or "chained"
-    tokenEndpoint: "...",
-    authorizationEndpoint: "...",
-  }
-}
-```
-
-The `PluginManifestSchemaCompat` automatically transforms v1 manifests to v2 format internally.
+See [Manifest v4](manifest-v4.md) for supported custom-plugin declarations.
+There is no chained manifest migration into v4 custom registration; use these
+runtime utilities only with a separately integrated host.

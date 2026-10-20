@@ -1,6 +1,11 @@
 # Migration Guide: Auth Forwarding (v1) to Chained Auth (v2)
 
-This guide covers migrating from v1 auth forwarding to v2 chained OAuth authentication.
+This guide describes migrating standalone runtime integration from forwarding to
+chained OAuth with a separately integrated host. It is **not a custom-plugin
+registration migration**: [Manifest v4](manifest-v4.md) excludes chained auth.
+The runtime helpers remain supported, but the host must implement the protocol
+in [chained-auth.md](chained-auth.md). The v1/v2 labels here describe auth modes,
+not supported manifest versions.
 
 ## When to Migrate
 
@@ -24,78 +29,16 @@ This guide covers migrating from v1 auth forwarding to v2 chained OAuth authenti
 | Session storage | None | Required |
 | OAuth flow | Platform handles | Plugin handles |
 | Request auth | Bearer token only | Token + platform assertion |
-| Manifest auth type | `"forwarding"` | `"chained"` |
+| v4 custom manifest | `auth.type: "forwarding"` | Unsupported; host-owned discovery |
 
 ## Step-by-Step Migration
 
-### 1. Update Plugin Manifest
+### 1. Confirm host support
 
-**Before (v1):**
-```typescript
-const app = mcp({
-  name: "my-plugin",
-  version: "1.0.0",
-  pluginManifest: {
-    specVersion: 2,
-    pluginId: "my-plugin",
-    name: "My Plugin",
-    version: "1.0.0",
-    signingKey: process.env.PLUGIN_SIGNING_KEY!,
-    auth: {
-      type: "forwarding",
-      tokenEndpoint: "https://external.com/oauth/token",
-      authorizationEndpoint: "https://external.com/oauth/authorize",
-      requiredScopes: ["read", "write"],
-      deliveryMethod: "header",
-    },
-    mcpUrl: "https://plugin.example.com/mcp",
-  },
-  auth: async (req) => {
-    const token = req.headers.get("authorization")?.slice(7);
-    return !!token;
-  },
-});
-```
-
-**After (v2):**
-```typescript
-const app = mcp({
-  name: "my-plugin",
-  version: "1.0.0",
-  pluginManifest: {
-    specVersion: 2,
-    pluginId: "my-plugin",
-    name: "My Plugin",
-    version: "1.0.0",
-    signingKey: process.env.PLUGIN_SIGNING_KEY!,
-    auth: {
-      type: "chained",
-      authorizationEndpoint: "https://plugin.example.com/auth/authorize",
-      callbackEndpoint: "https://plugin.example.com/auth/callback",
-      tokenEndpoint: "https://plugin.example.com/auth/token", // optional
-      requiredUserContext: ["user_id", "email"],
-      externalServices: [
-        {
-          name: "External Service",
-          authorizationEndpoint: "https://external.com/oauth/authorize",
-          requiredScopes: ["read", "write"],
-        },
-      ],
-    },
-    mcpUrl: "https://plugin.example.com/mcp",
-  },
-  chainedAuth: {
-    sessionStore,
-    platformJwksUrl: "https://platform.example.com/.well-known/jwks.json",
-    pluginSigningKey: process.env.PLUGIN_SIGNING_KEY!,
-    handlers: {
-      onAuthorize,
-      onCallback,
-      onToken, // optional
-    },
-  },
-});
-```
+Do not configure `pluginManifest` with chained auth: the v4 schema rejects it.
+Agree on discovery and assertion support with the host before migrating. Configure
+only the standalone `chainedAuth` router as shown in the
+[chained runtime guide](chained-auth.md#implementation).
 
 ### 2. Add Session Storage
 
@@ -341,7 +284,7 @@ PLUGIN_SIGNING_KEY=...  # For manifest signing only
 
 **After (v2):**
 ```bash
-PLUGIN_SIGNING_KEY=...       # For manifest + token signing
+PLUGIN_SIGNING_KEY=...       # For standalone plugin token signing
 PLUGIN_PUBLIC_KEY=...        # For token validation (derive from signing key)
 EXTERNAL_CLIENT_ID=...       # OAuth client ID (you manage this now)
 EXTERNAL_CLIENT_SECRET=...   # OAuth client secret
@@ -422,8 +365,8 @@ The `chainedAuth` config handles this automatically.
 
 ## Checklist
 
-- [ ] Update manifest `auth.type` from `"forwarding"` to `"chained"`
-- [ ] Add `authorizationEndpoint` and `callbackEndpoint` to manifest
+- [ ] Confirm a separately integrated host supports chained discovery and assertions
+- [ ] Configure the standalone `chainedAuth` router without a chained manifest
 - [ ] Implement session store (or use `InMemorySessionStore` for dev)
 - [ ] Implement `onAuthorize` handler
 - [ ] Implement `onCallback` handler
@@ -435,13 +378,14 @@ The `chainedAuth` config handles this automatically.
 
 ## Rollback
 
-If you need to rollback, simply revert manifest changes to `auth.type: "forwarding"` and restore the `auth` middleware. Session data will be orphaned but the platform will resume token management.
+Coordinate rollback with the host before restoring forwarding and its `auth` middleware.
+Session data and provider token management require a host-specific migration.
 
 ## Platform Coordination
 
 The platform team needs to:
 
-1. **Detect chained auth** from your manifest (`auth.type: "chained"`)
+1. **Discover chained auth** through a host-defined mechanism (not a v4 custom manifest)
 2. **Create user context JWTs** with required claims when redirecting users
 3. **Include platform assertions** on all MCP requests
 4. **Serve JWKS endpoint** at `/.well-known/jwks.json`

@@ -11,7 +11,8 @@ bun run keygen          # writes a keypair; put the private half in .env
 bun run dev             # http://localhost:3000/mcp
 ```
 
-With `FUTURITY_SIGNING_KEY` set, the manifest is served at
+`FUTURITY_SIGNING_KEY` is required; startup fails with setup instructions if it is
+missing. The manifest is served at
 `/.well-known/futurity/plugin` with its detached signature in the
 `X-Futurity-Signature` header:
 
@@ -41,6 +42,9 @@ you return there arrives on every tool call as `X-Plugin-Access-Token`, and
 
 Other grants — per-person OAuth, SAML bearer, an API key, or your own auth
 flow — are in the plugin authentication reference.
+
+The SDK sets the manifest `specVersion` automatically. Update the separate plugin
+`version` manually when you release your plugin.
 
 ## Where to edit
 
