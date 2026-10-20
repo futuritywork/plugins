@@ -108,16 +108,20 @@ successful calls return the same parsed result as `structuredContent` and JSON
 text in `content`. Output parsing validates the complete schema, including async
 refinements and strict-object rules, applies defaults, and strips unknown fields
 unless the object schema preserves or rejects them. Invalid results become tool
-errors. The MCP SDK also validates the normalized structured content.
+errors. Parsed results are also checked against the generated JSON Schema using
+the MCP SDK's default AJV validator, so mismatches (such as regex flags lost in
+conversion) become tool errors rather than client validation failures. The MCP
+SDK also validates the normalized structured content.
 
-Schemas must be directly object-shaped and convertible to draft-7 JSON Schema in
-output mode. Non-object schemas, unrepresentable fields (such as `z.date()`), and
-pipelines (including
-transforms and preprocessors, even nested ones) retain text-only behavior with
-no advertised schema or SDK output validation. Tools without `output` are
+Schemas must be directly object-shaped, convertible to draft-7 JSON Schema in
+output mode, and compilable by the MCP SDK's default AJV validator. Non-object
+schemas, unrepresentable fields (such as `z.date()`), invalid JSON Schema patterns,
+pipelines (including transforms and preprocessors), and `.overwrite()` checks,
+even nested ones, retain unparsed text-only behavior with no advertised schema or
+output validation. Tools without `output` are
 unchanged. Wrap arrays or primitives in an object to expose structured output.
 
-Tools without input:
+Tools without an input schema receive `{}` as their handler's first argument:
 
 ```typescript
 app.tool("ping", {
