@@ -95,13 +95,33 @@ app.tool("add", {
     a: z.number(),
     b: z.number(),
   }),
+  output: z.object({ sum: z.number() }),
   handler: async ({ a, b }) => {
     return { sum: a + b };
   },
 });
 ```
 
-Tools without input:
+An optional `output` declares the **final handler result**, not the upstream
+response. Supported Zod object schemas are advertised as MCP `outputSchema`;
+successful calls return the same parsed result as `structuredContent` and JSON
+text in `content`. Output parsing validates the complete schema, including async
+refinements and strict-object rules, applies defaults, and strips unknown fields
+unless the object schema preserves or rejects them. Invalid results become tool
+errors. Parsed results are also checked against the generated JSON Schema using
+the MCP SDK's default AJV validator, so mismatches (such as regex flags lost in
+conversion) become tool errors rather than client validation failures. The MCP
+SDK also validates the normalized structured content.
+
+Schemas must be directly object-shaped, convertible to draft-7 JSON Schema in
+output mode, and compilable by the MCP SDK's default AJV validator. Non-object
+schemas, unrepresentable fields (such as `z.date()`), invalid JSON Schema patterns,
+pipelines (including transforms and preprocessors), and `.overwrite()` checks,
+even nested ones, retain unparsed text-only behavior with no advertised schema or
+output validation. Tools without `output` are
+unchanged. Wrap arrays or primitives in an object to expose structured output.
+
+Tools without an input schema receive `{}` as their handler's first argument:
 
 ```typescript
 app.tool("ping", {
@@ -111,6 +131,22 @@ app.tool("ping", {
   },
 });
 ```
+
+Handlers also receive a per-call `ToolContext` with an `AbortSignal`:
+
+```typescript
+app.tool("status", {
+  handler: async (_input, { signal }) => {
+    const response = await fetch("https://example.com/status", { signal });
+    return response.json();
+  },
+});
+```
+
+The signal aborts when the MCP client cancels that request or the SDK connection
+closes. Cancellation is cooperative: pass the signal to downstream I/O or check
+`signal.throwIfAborted()` during work. It does not undo completed side effects.
+Existing handlers that accept only the input remain supported.
 
 ### `app.resource(uri, options)`
 

@@ -4,6 +4,8 @@ import type {
 	Implementation,
 	ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { JsonSchemaType, JsonSchemaValidator } from "@modelcontextprotocol/sdk/validation";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
 import { z } from "zod";
 import { createChainedAuthRouter } from "./chainedAuth";
 import { OAuthOptionsSchema, type OAuthOptions } from "./oauth";
@@ -39,11 +41,18 @@ function buildAnnotations(
 	};
 }
 
+/** Per-call context supplied to tool handlers. */
+export interface ToolContext {
+	/** Aborted on MCP request cancellation or connection closure. Pass to downstream I/O to stop work cooperatively. */
+	signal: AbortSignal;
+}
+
 export interface ToolOptions<I, O> {
 	description?: string;
 	input?: z.ZodType<I>;
+	/** Parses final object results and validates their advertised JSON Schema. Unsupported schemas, including pipelines and overwrites, retain unparsed text-only output. */
 	output?: z.ZodType<O>;
-	handler: (input: I) => Promise<O> | O;
+	handler: (input: I, context: ToolContext) => Promise<O> | O;
 	/** Tool danger level. Defaults to "read" if not specified. */
 	dangerLevel?: DangerLevel;
 	/** Whether this tool requires explicit user consent before execution, regardless of the user's permission mode. */
@@ -69,9 +78,35 @@ export interface McpAppOptions {
 	middleware?: Middleware[];
 }
 
+/** Compiles the client's output contract, or selects text-only output for unsupported schemas. */
+function compileOutputValidator(
+	schema: z.ZodType<unknown> | undefined
+): JsonSchemaValidator<unknown> | undefined {
+	if (schema?._zod.def.type !== "object") return undefined;
+	try {
+		const jsonSchema = z.toJSONSchema(schema, {
+			target: "draft-7",
+			io: "output",
+			unrepresentable: "throw",
+			override: ({ zodSchema }) => {
+				// MCP re-parses normalized results, so rewrites must stay text-only.
+				const def = zodSchema._zod.def;
+				if (def.type === "pipe" || def.checks?.some(check => check._zod.def.check === "overwrite")) {
+					throw new Error("Output rewrites require text-only results");
+				}
+			},
+		});
+		// Zod and the SDK use different JSON Schema typings; AJV checks the converted contract.
+		return new AjvJsonSchemaValidator().getValidator(jsonSchema as JsonSchemaType);
+	} catch {
+		return undefined;
+	}
+}
+
 type ToolRegistration = {
 	name: string;
 	opts: ToolOptions<unknown, unknown>;
+	validateOutput: JsonSchemaValidator<unknown> | undefined;
 };
 
 type ResourceRegistration = {
@@ -111,7 +146,7 @@ export class McpApp {
 		const server = new McpServer(serverInfo, serverOptions);
 
 		// Register all tools
-		for (const { name, opts } of this.toolRegistrations) {
+		for (const { name, opts, validateOutput } of this.toolRegistrations) {
 			const annotations = buildAnnotations(opts);
 			const meta: Record<string, unknown> = {};
 			if (opts.dangerLevel) meta["futurity:dangerLevel"] = opts.dangerLevel;
@@ -126,11 +161,26 @@ export class McpApp {
 					inputSchema: opts.input
 						? (opts.input as any).shape || opts.input
 						: undefined,
+					...(validateOutput && { outputSchema: opts.output }),
 					...(annotations && { annotations }),
 					...(Object.keys(meta).length > 0 && { _meta: meta }),
 				},
-				async (input: any) => {
-					const result = await opts.handler(input);
+				async (input: any, extra: ToolContext) => {
+					// The SDK passes context as the first argument for tools without an input schema.
+					const context = opts.input ? extra : input;
+					let result = await opts.handler(opts.input ? input : {}, { signal: context.signal });
+					if (validateOutput) {
+						// MCP validates but discards parsed data; normalize both response forms here.
+						const parsed = await opts.output!.safeParseAsync(result);
+						if (!parsed.success) {
+							throw new Error(`Output validation error: Invalid structured content for tool ${name}: ${parsed.error.message}`);
+						}
+						result = parsed.data;
+						const validation = validateOutput(result);
+						if (!validation.valid) {
+							throw new Error(`Output validation error: Invalid structured content for tool ${name}: ${validation.errorMessage}`);
+						}
+					}
 					return {
 						content: [
 							{
@@ -138,6 +188,9 @@ export class McpApp {
 								text: JSON.stringify(result),
 							},
 						],
+						...(validateOutput && {
+							structuredContent: result as Record<string, unknown>,
+						}),
 					};
 				}
 			);
@@ -170,6 +223,7 @@ export class McpApp {
 		this.toolRegistrations.push({
 			name,
 			opts: opts as ToolOptions<unknown, unknown>,
+			validateOutput: compileOutputValidator(opts.output),
 		});
 		return this;
 	}
