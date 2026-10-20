@@ -72,7 +72,6 @@ const port = parseInt(process.env.PORT || "3000", 10);
 const baseUrl = process.env.BASE_URL || `http://localhost:${port}`;
 
 const pluginManifest: PluginManifestOptions = {
-	specVersion: 4,
 	pluginId: "monday",
 	name: "monday.com MCP Server",
 	version: "1.0.0",

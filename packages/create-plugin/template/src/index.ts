@@ -11,29 +11,26 @@ const TOKEN_PATH = "/oauth/token";
 
 const signingKey = process.env.FUTURITY_SIGNING_KEY;
 if (!signingKey) {
-  console.warn(
-    "FUTURITY_SIGNING_KEY is not set, so /.well-known/futurity/plugin is not served.\n" +
+  throw new Error(
+    "FUTURITY_SIGNING_KEY is required to sign the plugin manifest.\n" +
       "Run `bun run keygen`, put the private key in .env, and restart to register this plugin.",
   );
 }
 
-const manifest: PluginManifestOptions | undefined = signingKey
-  ? {
-      specVersion: 4,
-      pluginId: "{{slug}}",
-      name: "{{name}}",
-      version: "0.1.0",
-      mcpUrl: `${PUBLIC_URL}/mcp`,
-      auth: {
-        type: "forwarding",
-        grantType: "client_credentials",
-        tokenEndpoint: `${PUBLIC_URL}${TOKEN_PATH}`,
-        requiredScopes: [],
-        deliveryMethod: "header",
-      },
-      signingKey,
-    }
-  : undefined;
+const manifest: PluginManifestOptions = {
+  pluginId: "{{slug}}",
+  name: "{{name}}",
+  version: "0.1.0",
+  mcpUrl: `${PUBLIC_URL}/mcp`,
+  auth: {
+    type: "forwarding",
+    grantType: "client_credentials",
+    tokenEndpoint: `${PUBLIC_URL}${TOKEN_PATH}`,
+    requiredScopes: [],
+    deliveryMethod: "header",
+  },
+  signingKey,
+};
 
 const app = mcp({
   name: "{{slug}}",

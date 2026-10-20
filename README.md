@@ -10,7 +10,7 @@ A minimal MCP (Model Context Protocol) server library for Bun with auth forwardi
 bunx create-futurity-plugin@latest my-plugin
 cd my-plugin
 cp .env.example .env
-bun run keygen
+bun run keygen # copy the private key into FUTURITY_SIGNING_KEY in .env
 bun run dev
 ```
 
@@ -25,7 +25,20 @@ bun add @futurity/plugins
 ```ts
 import { mcp, t } from "@futurity/plugins";
 
+const signingKey = process.env.FUTURITY_SIGNING_KEY;
+if (!signingKey) throw new Error("Set FUTURITY_SIGNING_KEY to your Ed25519 private key.");
+
+const pluginManifest = {
+  pluginId: "my-plugin",
+  name: "My Plugin",
+  version: "1.0.0",
+  mcpUrl: `${process.env.PUBLIC_URL ?? "http://localhost:3000"}/mcp`,
+  auth: { type: "none" as const },
+  signingKey,
+};
+
 const app = mcp({
+  pluginManifest,
   name: "my-plugin",
   version: "1.0.0",
 });
@@ -51,7 +64,13 @@ await app.listen(3000);
 
 ### `mcp(options)`
 
-Create an MCP application.
+Create an MCP application. `pluginManifest` is required, including for WebSocket
+servers; omitting it throws at construction. The manifest is validated and signed
+when `app.fetch` is first accessed or a transport starts. The SDK supplies
+`specVersion` automatically; you maintain only your plugin's release `version`.
+
+The snippets below reuse `pluginManifest` from Basic usage; configure its identity,
+auth, and public MCP URL for your own plugin.
 
 ```typescript
 const app = mcp({
@@ -60,7 +79,7 @@ const app = mcp({
   path: "/mcp",                // default: "/mcp"
   instructions: "...",         // optional system instructions
   capabilities: { ... },       // optional MCP capabilities
-  pluginManifest: { ... },     // optional auth forwarding manifest
+  pluginManifest,             // required signed v4 manifest
 });
 ```
 
@@ -156,7 +175,7 @@ await app.listen(3000, "websocket");
 ```typescript
 import { mcp, cors } from "@futurity/plugins";
 
-const app = mcp({ name: "server", version: "1.0.0" });
+const app = mcp({ name: "server", version: "1.0.0", pluginManifest });
 
 app.use(
   cors({
@@ -180,6 +199,7 @@ Configure OAuth metadata for `/.well-known/oauth-authorization-server`:
 const app = mcp({
   name: "server",
   version: "1.0.0",
+  pluginManifest,
   oauth: {
     issuer: "https://auth.example.com",
     authorizationEndpoint: "https://auth.example.com/oauth/authorize",
@@ -209,7 +229,8 @@ Auth forwarding lets the Futurity platform manage OAuth tokens on behalf of your
 bun run keygen
 ```
 
-This prints an Ed25519 keypair. Keep the private key secret; register the public key with the Futurity API.
+In a generated project, this prints an Ed25519 keypair. Set `FUTURITY_SIGNING_KEY`
+to the private key before starting the server. Keep the private key secret; register the public key with the Futurity API.
 
 #### 2. Configure the plugin manifest
 
@@ -218,13 +239,13 @@ const app = mcp({
   name: "my-plugin",
   version: "1.0.0",
   pluginManifest: {
-    specVersion: 4,
     pluginId: "my-plugin",
     name: "My Plugin",
     version: "1.0.0",
-    signingKey: process.env.FUTURITY_SIGNING_KEY!,
+    signingKey, // required key loaded above
     auth: {
       type: "forwarding",
+      grantType: "authorization_code",
       tokenEndpoint: "https://auth.example.com/oauth2/token",
       authorizationEndpoint: "https://auth.example.com/oauth2/authorize",
       requiredScopes: ["read", "write"],
@@ -274,6 +295,7 @@ Custom auth middleware:
 const app = mcp({
   name: "server",
   version: "1.0.0",
+  pluginManifest,
   auth: async (req) => {
     const token = req.headers.get("authorization")?.replace("Bearer ", "");
     if (!token) return false;
@@ -311,7 +333,7 @@ app.tool("set", {
 The HTTP transport supports multiple concurrent client sessions.
 
 ```typescript
-const app = mcp({ name: "server", version: "1.0.0" });
+const app = mcp({ name: "server", version: "1.0.0", pluginManifest });
 
 app.tool("example", { handler: async () => ({ ok: true }) });
 
@@ -346,6 +368,9 @@ The `examples/` directory in this repo contains runnable examples. Clone the rep
 ```bash
 git clone https://github.com/futuritywork/plugins.git
 cd plugins
+# Generate a keypair; keep the private key secret.
+bun -e 'import { generateKeyPair } from "./packages/plugins/src/signing"; console.log(generateKeyPair());'
+export FUTURITY_SIGNING_KEY="<privateKey from the output>"
 bun examples/calculator.ts      # Math operations and unit conversion
 bun examples/cors.ts            # CORS configuration
 bun examples/database.ts        # Document database
@@ -356,6 +381,11 @@ bun examples/todo-app.ts        # Todo list with CRUD
 bun examples/weather-api.ts     # Weather data API
 bun examples/monday/index.ts    # monday.com integration with auth forwarding
 ```
+
+Each example requires `FUTURITY_SIGNING_KEY`. The local examples publish
+`http://localhost:3000/mcp` by default; set `PUBLIC_URL` to the public HTTPS base
+URL before registration. They use `auth.type: "none"` because their tools do not
+require OAuth; `oauth.ts` demonstrates discovery metadata only.
 
 ## monday.com Integration Example
 

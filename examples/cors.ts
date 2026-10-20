@@ -1,10 +1,19 @@
 import { z } from "zod";
 import { mcp } from "@futurity/plugins";
+import { signingKey, mcpUrl } from "./config";
 import { cors } from "@futurity/plugins/cors";
 
 const app = mcp({
 	name: "my-cors-server",
 	version: "1.0.0",
+	pluginManifest: {
+		pluginId: "my-cors-server",
+		name: "my-cors-server",
+		version: "1.0.0",
+		mcpUrl,
+		auth: { type: "none" },
+		signingKey,
+	},
 	path: "/mcp",
 });
 

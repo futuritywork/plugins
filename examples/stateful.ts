@@ -7,6 +7,7 @@
 
 import { z } from "zod";
 import { mcp } from "@futurity/plugins";
+import { signingKey, mcpUrl } from "./config";
 import { cors } from "@futurity/plugins/cors";
 
 // Global state store
@@ -19,6 +20,14 @@ const state = {
 const app = mcp({
 	name: "stateful-server",
 	version: "1.0.0",
+	pluginManifest: {
+		pluginId: "stateful-server",
+		name: "stateful-server",
+		version: "1.0.0",
+		mcpUrl,
+		auth: { type: "none" },
+		signingKey,
+	},
 	instructions: `This server demonstrates stateful operations.
 
 Available tools:

@@ -49,32 +49,42 @@ host implementation and is not a supported custom-registration flow.
 
 ```typescript
 import {
-  mcp,
+  createChainedAuthRouter,
   createPendingSession,
   activateSession,
   generatePluginToken,
   generateChainedState,
   parseChainedState,
   InMemorySessionStore, // Use a real store in production
-} from "@futuritywork/plugins";
+} from "@futurity/plugins";
 
 const sessionStore = new InMemorySessionStore();
 
-const app = mcp({
-  name: "my-plugin",
-  version: "1.0.0",
-  chainedAuth: {
-    sessionStore,
-    platformJwksUrl: "https://platform.example.com/.well-known/jwks.json",
-    pluginSigningKey: process.env.PLUGIN_SIGNING_KEY!,
-    handlers: {
-      onAuthorize,
-      onCallback,
-      onToken, // optional
-    },
+const authRouter = createChainedAuthRouter({
+  sessionStore,
+  platformJwksUrl: "https://platform.example.com/.well-known/jwks.json",
+  pluginSigningKey: process.env.PLUGIN_SIGNING_KEY!,
+  handlers: {
+    onAuthorize,
+    onCallback,
+    onToken, // optional
   },
 });
+
+// Mount these handlers in your separately integrated host.
+async function handleAuth(req: Request): Promise<Response> {
+  switch (new URL(req.url).pathname) {
+    case "/auth/authorize": return authRouter.handleAuthorize(req);
+    case "/auth/callback": return authRouter.handleCallback(req);
+    case "/auth/token": return authRouter.handleToken(req);
+    default: return new Response("Not Found", { status: 404 });
+  }
+}
 ```
+
+`McpApp` / `mcp()` require a signed v4 manifest. For this standalone flow,
+mount `handleAuth` in your own HTTP host and route MCP requests separately;
+the router does not start a server or provide MCP request authentication.
 
 ### 2. Handle Authorization
 
@@ -240,9 +250,13 @@ SHA-256(METHOD + "\n" + PATH + "\n" + BODY)
 ### Plugin Validation
 
 ```typescript
-import { validateAuthenticatedRequest } from "@futuritywork/plugins";
+import { validateAuthenticatedRequest } from "@futurity/plugins";
 
-app.middleware(async (req, next) => {
+// Call this from your host's MCP route with its MCP request handler.
+async function authenticatedMcp(
+  req: Request,
+  next: (req: Request) => Promise<Response>
+): Promise<Response> {
   try {
     const { session, platformId } = await validateAuthenticatedRequest(
       req,
@@ -257,11 +271,11 @@ app.middleware(async (req, next) => {
     return next(req);
   } catch (error) {
     return Response.json(
-      { error: "unauthorized", message: error.message },
+      { error: "unauthorized", message: error instanceof Error ? error.message : "Invalid request" },
       { status: 401 }
     );
   }
-});
+}
 ```
 
 ## Security Model

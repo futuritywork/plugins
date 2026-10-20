@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import { mcp } from "@futurity/plugins";
+import { signingKey, mcpUrl } from "./config";
 import { cors } from "@futurity/plugins/cors";
 
 // Document type
@@ -39,6 +40,14 @@ function getCollection(name: string): Map<string, Document> {
 const app = mcp({
 	name: "memory-database",
 	version: "1.0.0",
+	pluginManifest: {
+		pluginId: "memory-database",
+		name: "memory-database",
+		version: "1.0.0",
+		mcpUrl,
+		auth: { type: "none" },
+		signingKey,
+	},
 	instructions: `An in-memory document database.
 
 Collections:

@@ -2,11 +2,13 @@
 
 The SDK validates and signs `specVersion: 4` manifests for Futurity custom-plugin
 registration. Marketplace v3 manifests are a separate consumer contract; this SDK
-no longer produces them. Versions 1, 2, and 3 are rejected.
+no longer produces them. `PluginManifestSchema` validates complete wire manifests
+and rejects versions 1, 2, and 3. Author options omit `specVersion`; the SDK always
+sets its supported version before validation and signing.
 
 ## Migration
 
-- Change `specVersion` to 4.
+- Remove `specVersion` from your `pluginManifest` options; the SDK supplies it.
 - Replace legacy `authForwarding: { ... }` with `auth: { type: "forwarding", ... }`.
 - Use `PluginManifestSchema` instead of the removed `PluginManifestSchemaV1` or
   `PluginManifestSchemaCompat` exports.
@@ -27,7 +29,6 @@ separately; the manifest's own `version` remains the plugin's three-part version
 import type { PluginManifestOptions } from "@futurity/plugins";
 
 const manifest: PluginManifestOptions = {
-  specVersion: 4,
   pluginId: "public-catalog",
   name: "Public Catalog",
   version: "1.0.0",

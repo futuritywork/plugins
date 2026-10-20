@@ -23,11 +23,24 @@ import {
 	validateAuthenticatedRequest,
 } from "./chainedAuth";
 import { mcp } from "./app";
+import { generateKeyPair } from "./signing";
+import type { PluginManifestOptions } from "./pluginManifest";
+
 import type {
 	ChainedAuthHandlers,
 	Session,
 	UserContext,
 } from "./types";
+
+// Synthetic discovery data for transport tests, not a chained registration declaration.
+const pluginManifest: PluginManifestOptions = {
+	pluginId: "test",
+	name: "Test",
+	version: "1.0.0",
+	mcpUrl: "http://localhost/mcp",
+	auth: { type: "none" },
+	signingKey: generateKeyPair().privateKey,
+};
 
 // ============================================================================
 // Test Key Generation Helpers
@@ -899,6 +912,7 @@ describe("HTTP Transport Auth Routes", () => {
 
 		let authorizeCalled = false;
 		app = mcp({
+			pluginManifest,
 			name: "test-server",
 			version: "1.0.0",
 			chainedAuth: {
@@ -937,6 +951,7 @@ describe("HTTP Transport Auth Routes", () => {
 
 		let callbackCalled = false;
 		app = mcp({
+			pluginManifest,
 			name: "test-server",
 			version: "1.0.0",
 			chainedAuth: {
@@ -973,6 +988,7 @@ describe("HTTP Transport Auth Routes", () => {
 
 		let tokenCalled = false;
 		app = mcp({
+			pluginManifest,
 			name: "test-server",
 			version: "1.0.0",
 			chainedAuth: {
@@ -1015,6 +1031,7 @@ describe("HTTP Transport Auth Routes", () => {
 		const testPort = 9879; // Use different port to avoid conflicts
 
 		app = mcp({
+			pluginManifest,
 			name: "test-server",
 			version: "1.0.0",
 			chainedAuth: {
@@ -1042,6 +1059,7 @@ describe("HTTP Transport Auth Routes", () => {
 		const testPort = 9880; // Use different port to avoid conflicts
 
 		app = mcp({
+			pluginManifest,
 			name: "test-server",
 			version: "1.0.0",
 			chainedAuth: {

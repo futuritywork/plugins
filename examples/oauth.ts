@@ -1,9 +1,18 @@
 import { z } from "zod";
 import { mcp } from "@futurity/plugins";
+import { signingKey, mcpUrl } from "./config";
 
 const app = mcp({
 	name: "my-oauth-server",
 	version: "1.0.0",
+	pluginManifest: {
+		pluginId: "my-oauth-server",
+		name: "my-oauth-server",
+		version: "1.0.0",
+		mcpUrl,
+		auth: { type: "none" },
+		signingKey,
+	},
 	oauth: {
 		issuer: "https://auth.example.com",
 		authorizationEndpoint: "https://auth.example.com/oauth/authorize",

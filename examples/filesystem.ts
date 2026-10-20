@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import { mcp } from "@futurity/plugins";
+import { signingKey, mcpUrl } from "./config";
 import { cors } from "@futurity/plugins/cors";
 
 interface FsNode {
@@ -87,6 +88,14 @@ function getParentAndName(path: string): { parent: FsNode | null; name: string }
 const app = mcp({
 	name: "virtual-filesystem",
 	version: "1.0.0",
+	pluginManifest: {
+		pluginId: "virtual-filesystem",
+		name: "virtual-filesystem",
+		version: "1.0.0",
+		mcpUrl,
+		auth: { type: "none" },
+		signingKey,
+	},
 	instructions: `A virtual filesystem server.
 
 Tools:

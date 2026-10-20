@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Manifest protocol version emitted by this SDK. */
+export const PLUGIN_MANIFEST_SPEC_VERSION = 4;
+
 const HttpUrlSchema = z.url({ protocol: /^https?$/ });
 
 /** Signed integration display and setup metadata supported by custom registration. */
@@ -255,7 +258,7 @@ export const GovernanceSchema = z
 /** A v4 custom-plugin producer manifest with validated auth and optional data governance. */
 export const PluginManifestSchema = z
   .object({
-    specVersion: z.literal(4),
+    specVersion: z.literal(PLUGIN_MANIFEST_SPEC_VERSION),
     pluginId: z.string().min(1),
     name: z.string().min(1),
     version: z.string().regex(/^\d+\.\d+\.\d+$/, "Must be semver (e.g. 1.0.0)"),
@@ -329,6 +332,7 @@ export type AuthForwarding = z.infer<typeof AuthForwardingSchema>;
 export type ChainedAuth = z.infer<typeof ChainedAuthSchema>;
 export type Governance = z.infer<typeof GovernanceSchema>;
 
-export interface PluginManifestOptions extends PluginManifest {
+/** Author-supplied manifest fields; the SDK adds specVersion before signing. */
+export interface PluginManifestOptions extends Omit<PluginManifest, "specVersion"> {
   signingKey: string;
 }

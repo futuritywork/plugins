@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import { mcp } from "@futurity/plugins";
+import { signingKey, mcpUrl } from "./config";
 import { cors } from "@futurity/plugins/cors";
 
 // Simulated weather data
@@ -71,6 +72,14 @@ function getWeather(cityId: string, date: Date) {
 const app = mcp({
 	name: "weather-api",
 	version: "1.0.0",
+	pluginManifest: {
+		pluginId: "weather-api",
+		name: "weather-api",
+		version: "1.0.0",
+		mcpUrl,
+		auth: { type: "none" },
+		signingKey,
+	},
 	instructions: `A weather information server.
 
 Tools:
