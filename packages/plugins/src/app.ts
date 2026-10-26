@@ -8,8 +8,8 @@ import { z } from "zod";
 import { createChainedAuthRouter } from "./chainedAuth";
 import { OAuthOptionsSchema, type OAuthOptions } from "./oauth";
 import {
+	PLUGIN_MANIFEST_SPEC_VERSION,
 	PluginManifestSchema,
-	PluginManifestSchemaCompat,
 	type PluginManifestOptions,
 } from "./pluginManifest";
 import { signPayload } from "./signing";
@@ -61,7 +61,8 @@ export interface McpAppOptions {
 	capabilities?: ServerOptions["capabilities"];
 	instructions?: ServerOptions["instructions"];
 	oauth?: OAuthOptions;
-	pluginManifest?: PluginManifestOptions;
+	/** Required signed v4 manifest, validated when the transport is initialized. */
+	pluginManifest: PluginManifestOptions;
 	auth?: AuthMiddleware;
 	chainedAuth?: ChainedAuthConfig;
 	path?: string;
@@ -88,12 +89,11 @@ export class McpApp {
 	private _wsTransport?: WebSocketTransport;
 	private _bunServer?: ReturnType<typeof Bun.serve>;
 
-	constructor(
-		private options: McpAppOptions = {
-			name: "mcp-app",
-			version: "0.1.0",
+	/** Throws if the required plugin manifest is missing. */
+	constructor(private options: McpAppOptions) {
+		if (!options?.pluginManifest) {
+			throw new Error("pluginManifest is required: provide a v4 manifest with a signingKey.");
 		}
-	) {
 		if (options.middleware) {
 			this.middlewares.push(...options.middleware);
 		}
@@ -205,8 +205,8 @@ export class McpApp {
 		return this._httpHandler;
 	}
 
-	private buildWellKnown(): Record<string, WellKnownEntry> | undefined {
-		let wellKnown: Record<string, WellKnownEntry> | undefined;
+	private buildWellKnown(): Record<string, WellKnownEntry> {
+		const wellKnown: Record<string, WellKnownEntry> = {};
 
 		if (this.options.oauth) {
 			const oauth = OAuthOptionsSchema.parse(this.options.oauth);
@@ -231,22 +231,21 @@ export class McpApp {
 			if (oauth.userInfoEndpoint)
 				authServer.userinfo_endpoint = oauth.userInfoEndpoint;
 
-			wellKnown = { "oauth-authorization-server": { body: authServer } };
+			wellKnown["oauth-authorization-server"] = { body: authServer };
 		}
 
-		if (this.options.pluginManifest) {
-			const { signingKey, ...manifestData } = this.options.pluginManifest;
-			// Use compat schema to support both v1 and v2 manifest formats
-			const manifest = PluginManifestSchemaCompat.parse(manifestData);
-			const payload = JSON.stringify(manifest);
-			const jws = signPayload(payload, signingKey);
+		const { signingKey, ...manifestData } = this.options.pluginManifest;
+		const manifest = PluginManifestSchema.parse({
+			...manifestData,
+			specVersion: PLUGIN_MANIFEST_SPEC_VERSION,
+		});
+		const payload = JSON.stringify(manifest);
+		const jws = signPayload(payload, signingKey);
 
-			wellKnown ??= {};
-			wellKnown["futurity/plugin"] = {
-				body: manifest,
-				headers: { "X-Futurity-Signature": jws },
-			};
-		}
+		wellKnown["futurity/plugin"] = {
+			body: manifest,
+			headers: { "X-Futurity-Signature": jws },
+		};
 
 		return wellKnown;
 	}
@@ -348,4 +347,4 @@ export class McpApp {
 	}
 }
 
-export const mcp = (options?: McpAppOptions) => new McpApp(options);
+export const mcp = (options: McpAppOptions) => new McpApp(options);

@@ -9,11 +9,21 @@
 
 import { z } from "zod";
 import { mcp } from "@futurity/plugins";
+import { signingKey, mcpUrl } from "./config";
 import { cors } from "@futurity/plugins/cors";
 
 const app = mcp({
 	name: "calculator",
 	version: "1.0.0",
+	pluginManifest: {
+		pluginId: "calculator",
+		developerEmail: "developer@example.com",
+		name: "calculator",
+		version: "1.0.0",
+		mcpUrl,
+		auth: { type: "none" },
+		signingKey,
+	},
 	instructions: `A calculator server with math operations and unit conversions.
 
 Tools:

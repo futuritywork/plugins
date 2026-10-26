@@ -10,6 +10,7 @@
 
 import { z } from "zod";
 import { mcp } from "@futurity/plugins";
+import { signingKey, mcpUrl } from "./config";
 import { cors } from "@futurity/plugins/cors";
 
 // Todo item type
@@ -35,6 +36,15 @@ function generateId(): string {
 const app = mcp({
 	name: "todo-app",
 	version: "1.0.0",
+	pluginManifest: {
+		pluginId: "todo-app",
+		developerEmail: "developer@example.com",
+		name: "todo-app",
+		version: "1.0.0",
+		mcpUrl,
+		auth: { type: "none" },
+		signingKey,
+	},
 	instructions: `A todo list management server.
 
 Tools:

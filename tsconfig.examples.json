@@ -1,0 +1,10 @@
+{
+  "extends": "./packages/plugins/tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@futurity/plugins": ["./packages/plugins/src/index.ts"],
+      "@futurity/plugins/*": ["./packages/plugins/src/*.ts"]
+    }
+  },
+  "include": ["examples/**/*.ts", "packages/create-plugin/template/**/*.ts"]
+}
