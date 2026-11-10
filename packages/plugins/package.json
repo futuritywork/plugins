@@ -1,0 +1,49 @@
+{
+  "name": "@futurity/plugins",
+  "version": "4.1.0",
+  "type": "module",
+  "description": "A minimal MCP (Model Context Protocol) server library for Bun that verifies Futurity identity tokens",
+  "author": "Futurity",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "llm",
+    "bun",
+    "futurity"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./cors": {
+      "import": "./dist/cors.js",
+      "types": "./dist/cors.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "bun run build.ts",
+    "test": "bun test",
+    "check": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "dependencies": {
+    "@futurity/plugin-manifest": "^1.0.0",
+    "jose": "^6.0.11"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@types/bun": "latest",
+    "typescript": "^7.0.2",
+    "zod": "^4.6.7"
+  }
+}

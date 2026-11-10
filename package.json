@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter '*' build",
+    "test": "bun run --filter '*' test",
+    "check": "bun run --filter '*' check && bun run check:examples",
+    "check:examples": "tsc --noEmit -p tsconfig.examples.json"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^7.0.2",
+    "zod": "^4.6.7"
+  }
+}

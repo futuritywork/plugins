@@ -1,0 +1,25 @@
+{
+  "name": "@futurity/plugin-manifest",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "The Futurity plugin manifest contract (spec 5): schemas, validation rules and helpers",
+  "author": "Futurity",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": ["src", "!src/**/*.test.ts", "!src/fixtures.ts"],
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "test": "bun test",
+    "check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^7.0.2",
+    "zod": "^4.6.7"
+  }
+}
